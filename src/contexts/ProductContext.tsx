@@ -1,58 +1,73 @@
 import React, {
   createContext,
   useContext,
-  useState,
   useEffect,
-  useRef
-} from 'react';
+  useRef,
+  useState,
+} from "react";
 
-import { useNotifications } from './NotificationContext';
-import { useGoogleSheets } from './GoogleSheetsContext';
+import { useNotifications } from "./NotificationContext";
+import { useGoogleSheets } from "./GoogleSheetsContext";
 
 import {
   extractGoogleDriveId,
-  formatGoogleDriveDirectUrl
-} from '../utils/googleDriveUtils';
+  formatGoogleDriveDirectUrl,
+} from "../utils/googleDriveUtils";
 
-import { ProductImage } from '../types';
+import {
+  Product,
+  ProductImage,
+} from "../types";
 
-export interface StoreProduct {
-  id: string;
-  product_id?: string;
-  sku?: string;
-  name: string;
-  price: number;
-  oldPrice?: number;
-  originalPrice?: number;
-  costPrice?: number;
-  cost_price?: number;
-  category: string;
-  category_id?: string;
-  badge?: string;
-  image: string;
-  images?: ProductImage[];
-  drive_file_id?: string;
-  image_data?: string;
-  supplier: string;
-  supplier_id?: string;
-  stock: number;
+/* =========================================================
+   TYPES
+   ========================================================= */
 
-  fulfillment_method?:
-    | 'OWN_STOCK'
-    | 'SUPPLIER_DROPSHIPPING';
+/**
+ * ProductContext works strictly with the V3 products table.
+ *
+ * V3 products fields:
+ *
+ * id
+ * product_id
+ * sku
+ * name
+ * description
+ * category_id
+ * product_group_id
+ * cost_price
+ * cost_currency
+ * selling_price
+ * selling_currency
+ * old_price
+ * old_price_currency
+ * fulfillment_method
+ * stock_tracking
+ * image_url
+ * drive_file_id
+ * rating
+ * badge
+ * status
+ * created_at
+ * updated_at
+ *
+ * IMPORTANT:
+ *
+ * supplier_id  -> product_sources
+ * stock        -> inventory
+ * image_data   -> never stored
+ */
 
-  description?: string;
-  rating?: number;
-  featured?: boolean;
-  bestSeller?: boolean;
-  newProduct?: boolean;
-}
+export type StoreProduct = Product;
 
 interface ProductContextType {
   products: StoreProduct[];
 
   addProduct: (
-    product: Omit<StoreProduct, 'id'>
+    product: Omit<
+      StoreProduct,
+      "id" | "created_at" | "updated_at"
+    >
   ) => Promise<boolean>;
 
   updateProduct: (
@@ -67,6 +82,14 @@ interface ProductContextType {
     }[]
   ) => void;
 
+  /**
+   * Temporary compatibility API.
+   *
+   * Stock is NOT stored in products.
+   *
+   * Real inventory operations will be implemented
+   * through InventoryContext -> inventory table.
+   */
   updateProductStock: (
     id: string,
     newStock: number
@@ -82,109 +105,19 @@ interface ProductContextType {
    ========================================================= */
 
 const PRODUCTS_CACHE_KEY =
-  'elites_store_products';
+  "elites_store_products";
 
 const LEGACY_PRODUCTS_CACHE_KEY =
-  'elites_products';
+  "elites_products";
 
 const PRODUCT_IMAGES_CACHE_KEY =
-  'elites_product_images';
-
-const DEFAULT_DRIVE_FOLDER_ID =
-  '1JfMshA_FjBRifRRqci0E-jZaoLhESWNl';
+  "elites_product_images";
 
 /* =========================================================
    DEFAULT PRODUCTS
    ========================================================= */
 
-const DEFAULT_PRODUCTS: StoreProduct[] = [
-  {
-    id: 'p1',
-    product_id: 'p1',
-    sku: 'SKU-OUD-01',
-    name: 'عطر العود الملكي الفاخر',
-    price: 180,
-    oldPrice: 240,
-    costPrice: 120,
-    category: 'عطور',
-    category_id: 'cat_perfumes',
-    badge: 'الأكثر مبيعاً',
-    image:
-      'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=60',
-    supplier: 'مورد العطور المميزة',
-    supplier_id: 'sup_1',
-    stock: 15,
-    fulfillment_method: 'OWN_STOCK',
-    description:
-      'عطر شرقي أصيل بخلاصة العود الملكي الفاخر يدوم طويلاً.',
-    rating: 4.9
-  },
-  {
-    id: 'p2',
-    product_id: 'p2',
-    sku: 'SKU-WAT-02',
-    name: 'ساعة يد كلاسيكية أنيقة',
-    price: 320,
-    oldPrice: 400,
-    costPrice: 210,
-    category: 'ساعات',
-    category_id: 'cat_watches',
-    badge: 'جديد',
-    image:
-      'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&auto=format&fit=crop&q=60',
-    supplier: 'مورد الساعات العالمية',
-    supplier_id: 'sup_2',
-    stock: 8,
-    fulfillment_method: 'OWN_STOCK',
-    description:
-      'ساعة يد رجالية بتصميم كلاسيكي راقٍ ومقاومة للماء.',
-    rating: 4.8
-  },
-  {
-    id: 'p3',
-    product_id: 'p3',
-    sku: 'SKU-BAG-03',
-    name: 'حقيبة جلد طبيعي فاخرة',
-    price: 250,
-    oldPrice: 310,
-    costPrice: 160,
-    category: 'حقائب',
-    category_id: 'cat_handbags',
-    badge: 'خصم خاص',
-    image:
-      'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=600&auto=format&fit=crop&q=60',
-    supplier: 'مورد الجلديات الفاخرة',
-    supplier_id: 'sup_3',
-    stock: 12,
-    fulfillment_method:
-      'SUPPLIER_DROPSHIPPING',
-    description:
-      'حقيبة أعمال مصنوعة من أجود أنواع الجلد الطبيعي.',
-    rating: 4.7
-  },
-  {
-    id: 'p4',
-    product_id: 'p4',
-    sku: 'SKU-ACC-04',
-    name: 'نظارة شمسية بتصميم عصري',
-    price: 140,
-    oldPrice: 180,
-    costPrice: 85,
-    category: 'إكسسوارات',
-    category_id: 'cat_accessories',
-    badge: 'مميز',
-    image:
-      'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600&auto=format&fit=crop&q=60',
-    supplier: 'مورد الإكسسوارات',
-    supplier_id: 'sup_4',
-    stock: 20,
-    fulfillment_method:
-      'SUPPLIER_DROPSHIPPING',
-    description:
-      'نظارة شمسية عصرية توفر حماية كاملة من الأشعة فوق البنفسجية.',
-    rating: 4.9
-  }
-];
+const DEFAULT_PRODUCTS: StoreProduct[] = [];
 
 /* =========================================================
    LOCAL STORAGE HELPERS
@@ -205,7 +138,7 @@ function safeGetJSON<T>(
     return JSON.parse(raw) as T;
   } catch (error) {
     console.warn(
-      `تعذر قراءة localStorage key: ${key}`,
+      `تعذر قراءة LocalStorage: ${key}`,
       error
     );
 
@@ -220,86 +153,174 @@ function safeRemoveItem(
     localStorage.removeItem(key);
   } catch (error) {
     console.warn(
-      `تعذر حذف localStorage key: ${key}`,
+      `تعذر حذف LocalStorage: ${key}`,
       error
     );
   }
 }
 
 /* =========================================================
-   IMAGE CACHE HELPERS
+   IMAGE CACHE SANITIZATION
    ========================================================= */
 
+/**
+ * ProductImage is stored only as lightweight metadata.
+ *
+ * No Base64.
+ * No Blob.
+ * No image binary.
+ */
 function sanitizeProductImagesForCache(
-  images: ProductImage[] | undefined
-): any[] | undefined {
+  images:
+    | ProductImage[]
+    | undefined
+): ProductImage[] | undefined {
   if (!Array.isArray(images)) {
     return undefined;
   }
 
-  return images.map((image: any) => {
-    if (
-      !image ||
-      typeof image !== 'object'
-    ) {
-      return image;
+  return images.map(
+    (image) => {
+      const source =
+        image as ProductImage & {
+          image_data?: unknown;
+          base64?: unknown;
+          data?: unknown;
+          blob?: unknown;
+          preview?: unknown;
+        };
+
+      const {
+        image_data: _imageData,
+        base64: _base64,
+        data: _data,
+        blob: _blob,
+        preview: _preview,
+        ...lightweightImage
+      } = source;
+
+      return lightweightImage as ProductImage;
     }
-
-    const {
-      image_data,
-      base64,
-      data,
-      blob,
-      ...lightweightImage
-    } = image;
-
-    return lightweightImage;
-  });
+  );
 }
 
+/* =========================================================
+   PRODUCT CACHE SANITIZATION
+   ========================================================= */
+
+/**
+ * Explicitly build a lightweight V3 product.
+ *
+ * We intentionally do NOT spread arbitrary legacy fields.
+ */
 function sanitizeProductForCache(
   product: StoreProduct
-): any {
-  const {
-    image_data,
-    images,
-    ...rest
-  } = product;
+): StoreProduct {
+  const source =
+    product as StoreProduct & {
+      image_data?: unknown;
+      images?: unknown;
+      stock?: unknown;
+      supplier_id?: unknown;
+      supplier?: unknown;
+      price?: unknown;
+      oldPrice?: unknown;
+      originalPrice?: unknown;
+      costPrice?: unknown;
+    };
 
-  const lightweight: any = {
-    ...rest
-  };
-
-  if (images) {
-    lightweight.images =
-      sanitizeProductImagesForCache(
-        images
-      );
-  }
+  const imageUrl =
+    typeof source.image_url === "string" &&
+    !source.image_url.startsWith("data:") &&
+    !source.image_url.startsWith("blob:")
+      ? source.image_url
+      : "";
 
   /*
-   * ممنوع تخزين Base64 في localStorage.
+   * Only canonical V3 product fields.
    */
-  if (
-    typeof lightweight.image ===
-      'string' &&
-    lightweight.image.startsWith(
-      'data:'
-    )
-  ) {
-    lightweight.image = '';
-  }
+  const lightweight = {
+    id:
+      source.id,
+
+    product_id:
+      source.product_id,
+
+    sku:
+      source.sku,
+
+    name:
+      source.name,
+
+    description:
+      source.description,
+
+    category_id:
+      source.category_id,
+
+    product_group_id:
+      source.product_group_id,
+
+    cost_price:
+      source.cost_price,
+
+    cost_currency:
+      source.cost_currency,
+
+    selling_price:
+      source.selling_price,
+
+    selling_currency:
+      source.selling_currency,
+
+    old_price:
+      source.old_price,
+
+    old_price_currency:
+      source.old_price_currency,
+
+    fulfillment_method:
+      source.fulfillment_method,
+
+    stock_tracking:
+      source.stock_tracking,
+
+    image_url:
+      imageUrl,
+
+    drive_file_id:
+      source.drive_file_id || "",
+
+    rating:
+      source.rating,
+
+    badge:
+      source.badge,
+
+    status:
+      source.status,
+
+    created_at:
+      source.created_at,
+
+    updated_at:
+      source.updated_at,
+  } as StoreProduct;
 
   return lightweight;
 }
 
 function sanitizeProductsForCache(
   products: StoreProduct[]
-): any[] {
+): StoreProduct[] {
   return products.map(
     sanitizeProductForCache
   );
 }
+
+/* =========================================================
+   SAVE PRODUCTS CACHE
+   ========================================================= */
 
 function saveProductsCache(
   products: StoreProduct[]
@@ -323,22 +344,26 @@ function saveProductsCache(
     return;
   } catch (error) {
     console.warn(
-      'تعذر حفظ المنتجات في LocalStorage. سيتم تنظيف الكاش.',
+      "تعذر حفظ المنتجات في LocalStorage. سيتم تنظيف الكاش.",
       error
     );
   }
 
+  /*
+   * Emergency cleanup.
+   */
   try {
     safeRemoveItem(
       LEGACY_PRODUCTS_CACHE_KEY
     );
 
     safeRemoveItem(
-      'elites_recent_drive_images'
+      "elites_recent_drive_images"
     );
 
     /*
-     * تنظيف معاينات Drive القديمة من sessionStorage.
+     * Remove only temporary Drive previews
+     * from sessionStorage.
      */
     try {
       const keysToRemove: string[] =
@@ -356,30 +381,32 @@ function saveProductsCache(
           key &&
           (
             key.startsWith(
-              'drive_preview_'
+              "drive_preview_"
             ) ||
             key.startsWith(
-              'drive_preview_id_'
+              "drive_preview_id_"
             )
           )
         ) {
-          keysToRemove.push(key);
+          keysToRemove.push(
+            key
+          );
         }
       }
 
       keysToRemove.forEach(
-        key => {
+        (key) => {
           try {
             sessionStorage.removeItem(
               key
             );
           } catch {
-            // ignore
+            // Ignore.
           }
         }
       );
     } catch {
-      // ignore
+      // Ignore sessionStorage errors.
     }
 
     localStorage.setItem(
@@ -388,25 +415,30 @@ function saveProductsCache(
     );
   } catch (retryError) {
     console.warn(
-      'تعذر حفظ كاش المنتجات بعد التنظيف.',
+      "تعذر حفظ كاش المنتجات بعد التنظيف.",
       retryError
     );
   }
 }
 
 /* =========================================================
-   PRODUCT IMAGE METADATA
+   PRODUCT IMAGE METADATA CACHE
    ========================================================= */
 
 function saveProductImageRecord(
   productId: string,
   driveId: string,
-  imageUrl: string,
-  folderId?: string
+  imageUrl: string
 ): void {
+  if (!driveId) {
+    return;
+  }
+
   try {
     const records =
-      safeGetJSON<any[]>(
+      safeGetJSON<
+        ProductImage[]
+      >(
         PRODUCT_IMAGES_CACHE_KEY,
         []
       );
@@ -416,78 +448,60 @@ function saveProductImageRecord(
         ? records
         : [];
 
-    const record = {
-      image_id:
-        'img_' + productId,
+    const now =
+      new Date().toISOString();
 
-      product_id:
-        productId,
+    const record =
+      {
+        id:
+          `img_${productId}_${Date.now()}`,
 
-      drive_file_id:
-        driveId || '',
+        image_id:
+          `img_${productId}`,
 
-      image_url:
-        imageUrl || '',
+        product_id:
+          productId,
 
-      /*
-       * إذا كان لدينا مجلد المنتج الحقيقي
-       * نستخدمه.
-       *
-       * وإلا نستخدم المجلد الرئيسي فقط
-       * كمرجع احتياطي.
-       */
-      folder_id:
-        folderId ||
-        DEFAULT_DRIVE_FOLDER_ID,
+        drive_file_id:
+          driveId,
 
-      is_primary:
-        true,
+        image_url:
+          imageUrl || "",
 
-      sort_order:
-        1
-    };
+        is_primary:
+          true,
 
-    const updatedRecords = [
-      record,
+        sort_order:
+          1,
 
-      ...safeRecords.filter(
-        image =>
-          image?.product_id !==
-          productId
-      )
-    ];
+        created_at:
+          now,
 
-    try {
-      localStorage.setItem(
-        PRODUCT_IMAGES_CACHE_KEY,
-        JSON.stringify(
+        updated_at:
+          now,
+      } as ProductImage;
+
+    const updatedRecords =
+      [
+        record,
+        ...safeRecords.filter(
+          (image) =>
+            image?.product_id !==
+            productId
+        ),
+      ];
+
+    localStorage.setItem(
+      PRODUCT_IMAGES_CACHE_KEY,
+      JSON.stringify(
+        sanitizeProductImagesForCache(
           updatedRecords
         )
-      );
-    } catch (storageError) {
-      console.warn(
-        'تعذر حفظ بيانات صورة المنتج:',
-        storageError
-      );
-
-      try {
-        safeRemoveItem(
-          PRODUCT_IMAGES_CACHE_KEY
-        );
-
-        localStorage.setItem(
-          PRODUCT_IMAGES_CACHE_KEY,
-          JSON.stringify([
-            record
-          ])
-        );
-      } catch {
-        // ignore
-      }
-    }
+      )
+    );
   } catch (error) {
     console.warn(
-      'خطأ في تحديث بيانات صورة المنتج:',
+      "تعذر حفظ بيانات صورة المنتج:",
       error
     );
   }
@@ -497,14 +511,35 @@ function saveProductImageRecord(
    IDS
    ========================================================= */
 
-function generateProductId(): string {
+function generateDatabaseId(): string {
   return (
-    'prod_' +
+    "prod_" +
     Date.now() +
-    '_' +
+    "_" +
     Math.random()
       .toString(36)
-      .substring(2, 7)
+      .substring(2, 8)
+  );
+}
+
+function generateBusinessProductId(
+  sku?: string
+): string {
+  const normalizedSku =
+    sku?.trim();
+
+  if (normalizedSku) {
+    return normalizedSku;
+  }
+
+  return (
+    "PRD-" +
+    Date.now() +
+    "-" +
+    Math.random()
+      .toString(36)
+      .substring(2, 6)
+      .toUpperCase()
   );
 }
 
@@ -516,29 +551,28 @@ function dispatchProductChanged(): void {
   try {
     window.dispatchEvent(
       new Event(
-        'elites_product_changed'
+        "elites_product_changed"
       )
     );
   } catch (error) {
     console.warn(
-      'تعذر إرسال حدث تحديث المنتج:',
+      "تعذر إرسال حدث تحديث المنتج:",
       error
     );
   }
 }
 
 /* =========================================================
-   IMAGE DATA HELPERS
+   IMAGE HELPERS
    ========================================================= */
 
 function isBase64Image(
   value: unknown
-): boolean {
+): value is string {
   return (
-    typeof value ===
-      'string' &&
+    typeof value === "string" &&
     value.startsWith(
-      'data:image/'
+      "data:image/"
     )
   );
 }
@@ -553,7 +587,7 @@ function getMimeTypeFromDataUrl(
 
   return (
     match?.[1] ||
-    'image/jpeg'
+    "image/jpeg"
   );
 }
 
@@ -574,16 +608,16 @@ function getFileExtension(
     string,
     string
   > = {
-    'image/jpeg': 'jpg',
-    'image/jpg': 'jpg',
-    'image/png': 'png',
-    'image/webp': 'webp',
-    'image/gif': 'gif'
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
   };
 
   return (
     map[mimeType] ||
-    'jpg'
+    "jpg"
   );
 }
 
@@ -591,31 +625,166 @@ function makeSafeImageFileName(
   productName: string,
   sku: string,
   originalFileName?: string,
-  mimeType = 'image/jpeg'
+  mimeType = "image/jpeg"
 ): string {
   const extension =
     getFileExtension(
-      originalFileName ||
-        '',
+      originalFileName || "",
       mimeType
     );
 
   const base =
     sku ||
     productName ||
-    'product-image';
+    "product-image";
 
   const safeBase =
     base
       .replace(
         /[\\/:*?"<>|#%]/g,
-        '-'
+        "-"
       )
       .trim()
       .substring(0, 80) ||
-    'product-image';
+    "product-image";
 
   return `${safeBase}-main.${extension}`;
+}
+
+/* =========================================================
+   IMAGE URL NORMALIZATION
+   ========================================================= */
+
+function normalizeProductImage(
+  imageValue: string
+): {
+  imageUrl: string;
+  driveFileId?: string;
+} {
+  if (!imageValue) {
+    return {
+      imageUrl: "",
+    };
+  }
+
+  const driveId =
+    extractGoogleDriveId(
+      imageValue
+    );
+
+  if (driveId) {
+    return {
+      imageUrl:
+        formatGoogleDriveDirectUrl(
+          driveId
+        ),
+      driveFileId:
+        driveId,
+    };
+  }
+
+  if (
+    imageValue.startsWith(
+      "http://"
+    ) ||
+    imageValue.startsWith(
+      "https://"
+    )
+  ) {
+    return {
+      imageUrl:
+        imageValue,
+    };
+  }
+
+  return {
+    imageUrl: "",
+  };
+}
+
+/* =========================================================
+   BUILD CANONICAL V3 PRODUCT
+   ========================================================= */
+
+function buildCanonicalProduct(
+  product: Partial<StoreProduct> & {
+    id: string;
+    product_id: string;
+    sku: string;
+    name: string;
+    created_at: string;
+    updated_at: string;
+  }
+): StoreProduct {
+  return {
+    id:
+      product.id,
+
+    product_id:
+      product.product_id,
+
+    sku:
+      product.sku,
+
+    name:
+      product.name,
+
+    description:
+      product.description || "",
+
+    category_id:
+      product.category_id || "",
+
+    product_group_id:
+      product.product_group_id || "",
+
+    cost_price:
+      product.cost_price ?? 0,
+
+    cost_currency:
+      product.cost_currency || "ILS",
+
+    selling_price:
+      product.selling_price ?? 0,
+
+    selling_currency:
+      product.selling_currency || "ILS",
+
+    old_price:
+      product.old_price ?? 0,
+
+    old_price_currency:
+      product.old_price_currency || "",
+
+    fulfillment_method:
+      product.fulfillment_method ||
+      "OWN_STOCK",
+
+    stock_tracking:
+      product.stock_tracking ??
+      false,
+
+    image_url:
+      product.image_url || "",
+
+    drive_file_id:
+      product.drive_file_id || "",
+
+    rating:
+      product.rating ?? 0,
+
+    badge:
+      product.badge || "",
+
+    status:
+      product.status || "ACTIVE",
+
+    created_at:
+      product.created_at,
+
+    updated_at:
+      product.updated_at,
+  } as StoreProduct;
 }
 
 /* =========================================================
@@ -631,440 +800,129 @@ const ProductContext =
    PROVIDER
    ========================================================= */
 
-export const ProductProvider: React.FC<{
-  children: React.ReactNode;
-}> = ({ children }) => {
-  const {
-    notifyLowStock
-  } = useNotifications();
+export const ProductProvider:
+  React.FC<{
+    children: React.ReactNode;
+  }> = ({
+    children,
+  }) => {
 
-  const {
-    createProductFolder,
-    uploadImageToDrive
-  } = useGoogleSheets();
+    const {
+      notifyLowStock,
+    } = useNotifications();
 
-  const [
-    products,
-    setProducts
-  ] = useState<StoreProduct[]>(() => {
-    try {
-      const currentCache =
-        safeGetJSON<any[]>(
-          PRODUCTS_CACHE_KEY,
-          []
-        );
+    const {
+      createProductFolder,
+      uploadImageToDrive,
+    } = useGoogleSheets();
 
-      if (
-        Array.isArray(
-          currentCache
-        ) &&
-        currentCache.length > 0
-      ) {
-        return currentCache as StoreProduct[];
-      }
+    /* =======================================================
+       PRODUCTS STATE
+       ======================================================= */
 
-      const legacyCache =
-        safeGetJSON<any[]>(
-          LEGACY_PRODUCTS_CACHE_KEY,
-          []
-        );
+    const [
+      products,
+      setProducts,
+    ] =
+      useState<StoreProduct[]>(
+        () => {
+          const currentCache =
+            safeGetJSON<
+              StoreProduct[]
+            >(
+              PRODUCTS_CACHE_KEY,
+              []
+            );
 
-      if (
-        Array.isArray(
-          legacyCache
-        ) &&
-        legacyCache.length > 0
-      ) {
-        const migrated =
-          legacyCache as StoreProduct[];
+          if (
+            Array.isArray(
+              currentCache
+            )
+          ) {
+            return currentCache.map(
+              sanitizeProductForCache
+            );
+          }
 
-        saveProductsCache(
-          migrated
-        );
-
-        return migrated;
-      }
-    } catch (error) {
-      console.warn(
-        'تعذر تحميل المنتجات من LocalStorage:',
-        error
+          return DEFAULT_PRODUCTS;
+        }
       );
-    }
 
-    return DEFAULT_PRODUCTS;
-  });
+    const productsRef =
+      useRef<StoreProduct[]>(
+        products
+      );
 
-  const productsRef =
-    useRef<StoreProduct[]>(
-      products
-    );
+    useEffect(() => {
+      productsRef.current =
+        products;
+    }, [products]);
 
-  useEffect(() => {
-    productsRef.current =
-      products;
-  }, [products]);
+    /* =======================================================
+       REMOVE LEGACY PRODUCT CACHE
+       ======================================================= */
 
-  /*
-   * حذف المفتاح القديم مرة واحدة.
-   */
-  useEffect(() => {
-    try {
+    useEffect(() => {
       safeRemoveItem(
         LEGACY_PRODUCTS_CACHE_KEY
       );
-    } catch {
-      // ignore
-    }
-  }, []);
+    }, []);
 
-  /* =======================================================
-     ADD PRODUCT
-     ======================================================= */
+    /* =======================================================
+       ADD PRODUCT
+       ======================================================= */
 
-  const addProduct = async (
-    productData: Omit<
-      StoreProduct,
-      'id'
-    >
-  ): Promise<boolean> => {
-    try {
-      const id =
-        generateProductId();
+    const addProduct = async (
+      productData: Omit<
+        StoreProduct,
+        "id" | "created_at" | "updated_at"
+      >
+    ): Promise<boolean> => {
 
-      const productName =
-        productData.name?.trim() ||
-        'منتج';
+      try {
 
-      const sku =
-        productData.sku?.trim() ||
-        `SKU-${Date.now()}`;
+        const databaseId =
+          generateDatabaseId();
 
-      let formattedImg =
-        productData.image || '';
+        const productName =
+          productData.name?.trim() ||
+          "منتج";
 
-      let driveId:
-        | string
-        | undefined =
-        extractGoogleDriveId(
-          formattedImg
-        );
+        const sku =
+          productData.sku?.trim() ||
+          `SKU-${Date.now()}`;
 
-      let productFolderId:
-        | string
-        | undefined;
-
-      /* =====================================================
-         IMAGE: BASE64
-         ===================================================== */
-
-      if (
-        isBase64Image(
-          formattedImg
-        )
-      ) {
-        console.log(
-          'ProductContext: Base64 image detected.'
-        );
-
-        /*
-         * إنشاء مجلد حقيقي باسم SKU.
-         */
-        const folderResult =
-          await createProductFolder(
-            productName,
+        const businessProductId =
+          productData.product_id?.trim() ||
+          generateBusinessProductId(
             sku
           );
 
-        if (
-          !folderResult.success ||
-          !folderResult.folderId
-        ) {
-          console.error(
-            'ProductContext: failed to create product folder:',
-            folderResult
-          );
+        let imageUrl =
+          productData.image_url ||
+          "";
 
-          return false;
-        }
-
-        productFolderId =
-          folderResult.folderId;
-
-        const mimeType =
-          getMimeTypeFromDataUrl(
-            formattedImg
-          );
-
-        const fileName =
-          makeSafeImageFileName(
-            productName,
-            sku,
-            undefined,
-            mimeType
-          );
-
-        /*
-         * رفع الصورة إلى مجلد المنتج.
-         */
-        const uploadResult =
-          await uploadImageToDrive(
-            formattedImg,
-            fileName,
-            mimeType,
-            'product',
-            productFolderId
-          );
-
-        /*
-         * ممنوع الاستمرار بدون fileId حقيقي.
-         */
-        if (
-          !uploadResult.success ||
-          !uploadResult.fileId
-        ) {
-          console.error(
-            'ProductContext: image upload failed:',
-            uploadResult
-          );
-
-          return false;
-        }
-
-        driveId =
-          uploadResult.fileId;
-
-        formattedImg =
-          uploadResult.directUrl ||
-          uploadResult.viewUrl ||
-          uploadResult.driveUrl ||
-          formatGoogleDriveDirectUrl(
-            driveId
-          );
-
-        console.log(
-          'ProductContext: image uploaded:',
-          {
-            fileId: driveId,
-            folderId: productFolderId,
-            url: formattedImg
-          }
-        );
-      }
-
-      /* =====================================================
-         IMAGE: EXISTING GOOGLE DRIVE
-         ===================================================== */
-
-      else if (driveId) {
-        formattedImg =
-          formatGoogleDriveDirectUrl(
-            driveId
-          );
-
-        console.log(
-          'ProductContext: existing Drive image:',
-          driveId
-        );
-      }
-
-      /* =====================================================
-         IMAGE: EXTERNAL URL
-         ===================================================== */
-
-      else if (
-        typeof formattedImg ===
-          'string' &&
-        (
-          formattedImg.startsWith(
-            'http://'
+        let driveFileId =
+          productData.drive_file_id ||
+          extractGoogleDriveId(
+            imageUrl
           ) ||
-          formattedImg.startsWith(
-            'https://'
-          )
-        )
-      ) {
-        /*
-         * رابط خارجي حقيقي.
-         * لا نضع drive_file_id.
-         */
-        driveId =
-          undefined;
-      }
+          "";
 
-      /* =====================================================
-         IMAGE: EMPTY
-         ===================================================== */
-
-      else {
-        formattedImg = '';
-        driveId =
-          undefined;
-      }
-
-      /* =====================================================
-         CREATE PRODUCT
-         ===================================================== */
-
-      const newProduct: StoreProduct =
-        {
-          ...productData,
-
-          id,
-
-          product_id: id,
-
-          sku,
-
-          image:
-            formattedImg,
-
-          ...(driveId
-            ? {
-                drive_file_id:
-                  driveId
-              }
-            : {}),
-
-          rating:
-            productData.rating ||
-            5.0
-        };
-
-      const updatedProducts = [
-        newProduct,
-        ...productsRef.current
-      ];
-
-      productsRef.current =
-        updatedProducts;
-
-      /*
-       * حفظ النسخة الخفيفة فقط.
-       */
-      saveProductsCache(
-        updatedProducts
-      );
-
-      /*
-       * حفظ بيانات الصورة فقط
-       * إذا كان لدينا fileId حقيقي.
-       */
-      if (
-        driveId
-      ) {
-        saveProductImageRecord(
-          id,
-          driveId,
-          formattedImg,
-          productFolderId
-        );
-      }
-
-      setProducts(
-        updatedProducts
-      );
-
-      dispatchProductChanged();
-
-      console.log(
-        'ProductContext: product added successfully:',
-        newProduct
-      );
-
-      return true;
-    } catch (error) {
-      console.error(
-        'حدث خطأ أثناء إضافة المنتج:',
-        error
-      );
-
-      return false;
-    }
-  };
-
-  /* =======================================================
-     UPDATE PRODUCT
-     ======================================================= */
-
-  const updateProduct = async (
-    id: string,
-    updatedFields: Partial<StoreProduct>
-  ): Promise<boolean> => {
-    try {
-      const currentProducts =
-        productsRef.current;
-
-      const existingProduct =
-        currentProducts.find(
-          product =>
-            product.id === id ||
-            product.product_id === id
-        );
-
-      if (!existingProduct) {
-        console.warn(
-          `لم يتم العثور على المنتج المطلوب تحديثه: ${id}`
-        );
-
-        return false;
-      }
-
-      let formattedImg =
-        existingProduct.image || '';
-
-      let driveId:
-        | string
-        | undefined =
-        existingProduct.drive_file_id;
-
-      let productFolderId:
-        | string
-        | undefined;
-
-      /* =====================================================
-         IMAGE WAS CHANGED
-         ===================================================== */
-
-      if (
-        updatedFields.image !==
-        undefined
-      ) {
-        const newImage =
-          updatedFields.image || '';
-
-        /* ================================================
-           NEW BASE64 IMAGE
-           ================================================ */
+        /* =====================================================
+           BASE64 -> GOOGLE DRIVE
+           ===================================================== */
 
         if (
           isBase64Image(
-            newImage
+            imageUrl
           )
         ) {
+
           console.log(
-            'ProductContext: new Base64 image during update.'
+            "ProductContext V3: رفع الصورة إلى Google Drive..."
           );
 
-          const productName =
-            (
-              updatedFields.name ||
-              existingProduct.name ||
-              'منتج'
-            ).trim();
-
-          const sku =
-            (
-              updatedFields.sku ||
-              existingProduct.sku ||
-              `SKU-${Date.now()}`
-            ).trim();
-
-          /*
-           * ننشئ/نسترجع مجلد SKU الحقيقي.
-           *
-           * Apps Script مصمم بحيث لا ينشئ
-           * مجلدًا مكررًا إذا كان موجودًا.
-           */
           const folderResult =
             await createProductFolder(
               productName,
@@ -1075,20 +933,18 @@ export const ProductProvider: React.FC<{
             !folderResult.success ||
             !folderResult.folderId
           ) {
+
             console.error(
-              'ProductContext: failed to create/find product folder during update:',
+              "فشل إنشاء مجلد المنتج:",
               folderResult
             );
 
             return false;
           }
 
-          productFolderId =
-            folderResult.folderId;
-
           const mimeType =
             getMimeTypeFromDataUrl(
-              newImage
+              imageUrl
             );
 
           const fileName =
@@ -1099,463 +955,730 @@ export const ProductProvider: React.FC<{
               mimeType
             );
 
-          /*
-           * رفع الصورة الجديدة.
-           */
           const uploadResult =
             await uploadImageToDrive(
-              newImage,
+              imageUrl,
               fileName,
               mimeType,
-              'product',
-              productFolderId
+              "product",
+              folderResult.folderId
             );
 
-          /*
-           * لا نعدل المنتج إذا فشل الرفع.
-           */
           if (
             !uploadResult.success ||
             !uploadResult.fileId
           ) {
+
             console.error(
-              'ProductContext: update image upload failed:',
+              "فشل رفع الصورة:",
               uploadResult
             );
 
             return false;
           }
 
-          driveId =
+          driveFileId =
             uploadResult.fileId;
 
-          formattedImg =
+          imageUrl =
             uploadResult.directUrl ||
             uploadResult.viewUrl ||
             uploadResult.driveUrl ||
             formatGoogleDriveDirectUrl(
-              driveId
+              driveFileId
             );
 
-          console.log(
-            'ProductContext: updated image uploaded:',
-            {
-              fileId: driveId,
-              folderId:
-                productFolderId,
-              url: formattedImg
-            }
+        } else {
+
+          const normalized =
+            normalizeProductImage(
+              imageUrl
+            );
+
+          imageUrl =
+            normalized.imageUrl;
+
+          if (
+            normalized.driveFileId
+          ) {
+            driveFileId =
+              normalized.driveFileId;
+          }
+        }
+
+        /* =====================================================
+           CREATE CANONICAL V3 PRODUCT
+           ===================================================== */
+
+        const now =
+          new Date().toISOString();
+
+        const newProduct =
+          buildCanonicalProduct({
+            ...productData,
+
+            id:
+              databaseId,
+
+            product_id:
+              businessProductId,
+
+            sku,
+
+            name:
+              productName,
+
+            image_url:
+              imageUrl,
+
+            drive_file_id:
+              driveFileId,
+
+            created_at:
+              now,
+
+            updated_at:
+              now,
+          });
+
+        const updatedProducts =
+          [
+            newProduct,
+            ...productsRef.current,
+          ];
+
+        productsRef.current =
+          updatedProducts;
+
+        saveProductsCache(
+          updatedProducts
+        );
+
+        if (
+          driveFileId
+        ) {
+          saveProductImageRecord(
+            databaseId,
+            driveFileId,
+            imageUrl
           );
         }
 
-        /* ================================================
-           EXISTING GOOGLE DRIVE IMAGE
-           ================================================ */
+        setProducts(
+          updatedProducts
+        );
 
-        else {
-          const extracted =
-            extractGoogleDriveId(
-              newImage
-            );
+        dispatchProductChanged();
 
-          if (extracted) {
-            driveId =
-              extracted;
+        console.log(
+          "ProductContext V3: تمت إضافة المنتج:",
+          newProduct
+        );
 
-            formattedImg =
-              formatGoogleDriveDirectUrl(
-                extracted
-              );
-          }
+        return true;
 
-          /* ==============================================
-             EXTERNAL IMAGE
-             ============================================== */
+      } catch (error) {
 
-          else if (
-            newImage.startsWith(
-              'http://'
-            ) ||
-            newImage.startsWith(
-              'https://'
-            )
-          ) {
-            formattedImg =
-              newImage;
+        console.error(
+          "حدث خطأ أثناء إضافة المنتج:",
+          error
+        );
 
-            driveId =
-              undefined;
-          }
-
-          /* ==============================================
-             EMPTY IMAGE
-             ============================================== */
-
-          else {
-            formattedImg = '';
-            driveId =
-              undefined;
-          }
-        }
+        return false;
       }
+    };
 
-      /* =====================================================
-         MERGE PRODUCT
-         ===================================================== */
+    /* =======================================================
+       UPDATE PRODUCT
+       ======================================================= */
 
-      const mergedProduct: StoreProduct =
-        {
-          ...existingProduct,
-
-          ...updatedFields,
-
-          image:
-            formattedImg,
-
-          ...(driveId
-            ? {
-                drive_file_id:
-                  driveId
-              }
-            : {
-                drive_file_id:
-                  undefined
-              })
-        };
-
-      const updatedProducts =
-        currentProducts.map(
-          product => {
-            if (
-              product.id !== id &&
-              product.product_id !== id
-            ) {
-              return product;
-            }
-
-            return mergedProduct;
-          }
-        );
-
-      productsRef.current =
-        updatedProducts;
-
-      saveProductsCache(
-        updatedProducts
-      );
-
-      /*
-       * حفظ بيانات الصورة الجديدة
-       * فقط إذا كان fileId حقيقيًا.
-       */
-      if (
-        driveId
-      ) {
-        saveProductImageRecord(
-          mergedProduct.product_id ||
-            mergedProduct.id,
-          driveId,
-          formattedImg,
-          productFolderId
-        );
-      }
-
-      setProducts(
-        updatedProducts
-      );
-
-      dispatchProductChanged();
-
-      console.log(
-        'ProductContext: product updated successfully:',
-        mergedProduct
-      );
-
-      return true;
-    } catch (error) {
-      console.error(
-        'حدث خطأ أثناء تحديث المنتج:',
-        error
-      );
-
-      return false;
-    }
-  };
-
-  /* =======================================================
-     UPDATE PRODUCT STOCK
-     ======================================================= */
-
-  const updateProductStock = (
-    id: string,
-    newStock: number
-  ) => {
-    try {
-      const currentProducts =
-        productsRef.current;
-
-      let lowStockProduct:
-        | StoreProduct
-        | null = null;
-
-      const updatedProducts =
-        currentProducts.map(
-          product => {
-            if (
-              product.id !== id &&
-              product.product_id !== id
-            ) {
-              return product;
-            }
-
-            const updatedProduct =
-              {
-                ...product,
-                stock:
-                  newStock
-              };
-
-            if (
-              newStock <= 5
-            ) {
-              lowStockProduct =
-                updatedProduct;
-            }
-
-            return updatedProduct;
-          }
-        );
-
-      const changed =
-        updatedProducts.some(
-          (product, index) =>
-            product !==
-            currentProducts[index]
-        );
-
-      if (!changed) {
-        return;
-      }
-
-      if (
-        lowStockProduct
-      ) {
-        notifyLowStock(
-          lowStockProduct as any
-        ).catch(
-          console.error
-        );
-      }
-
-      productsRef.current =
-        updatedProducts;
-
-      saveProductsCache(
-        updatedProducts
-      );
-
-      setProducts(
-        updatedProducts
-      );
-
-      dispatchProductChanged();
-    } catch (error) {
-      console.error(
-        'حدث خطأ أثناء تحديث مخزون المنتج:',
-        error
-      );
-    }
-  };
-
-  /* =======================================================
-     BULK UPDATE PRODUCTS
-     ======================================================= */
-
-  const updateProducts = (
-    updates: {
-      id: string;
-      product: Partial<StoreProduct>;
-    }[]
-  ) => {
-    try {
-      if (
-        !Array.isArray(
-          updates
-        ) ||
-        updates.length === 0
-      ) {
-        return;
-      }
-
-      const currentProducts =
-        productsRef.current;
-
-      const updatedProducts =
-        currentProducts.map(
-          product => {
-            const update =
-              updates.find(
-                item =>
-                  item.id ===
-                    product.id ||
-                  item.id ===
-                    product.product_id
-              );
-
-            if (!update) {
-              return product;
-            }
-
-            return {
-              ...product,
-              ...update.product
-            };
-          }
-        );
-
-      productsRef.current =
-        updatedProducts;
-
-      saveProductsCache(
-        updatedProducts
-      );
-
-      setProducts(
-        updatedProducts
-      );
-
-      console.log(
-        'Context - Products updated:',
-        updatedProducts
-      );
-
-      dispatchProductChanged();
-    } catch (error) {
-      console.error(
-        'حدث خطأ أثناء تحديث المنتجات:',
-        error
-      );
-    }
-  };
-
-  /* =======================================================
-     DELETE PRODUCT
-     ======================================================= */
-
-  const deleteProduct = (
-    id: string
-  ) => {
-    try {
-      const currentProducts =
-        productsRef.current;
-
-      const updatedProducts =
-        currentProducts.filter(
-          product =>
-            product.id !== id &&
-            product.product_id !== id
-        );
-
-      if (
-        updatedProducts.length ===
-        currentProducts.length
-      ) {
-        console.warn(
-          `لم يتم العثور على المنتج المطلوب حذفه: ${id}`
-        );
-
-        return;
-      }
-
-      productsRef.current =
-        updatedProducts;
-
-      saveProductsCache(
-        updatedProducts
-      );
+    const updateProduct = async (
+      id: string,
+      updatedFields: Partial<StoreProduct>
+    ): Promise<boolean> => {
 
       try {
-        const existingImages =
-          safeGetJSON<any[]>(
-            PRODUCT_IMAGES_CACHE_KEY,
-            []
+
+        const currentProducts =
+          productsRef.current;
+
+        const existingProduct =
+          currentProducts.find(
+            (product) =>
+              product.id === id ||
+              product.product_id === id
           );
 
         if (
-          Array.isArray(
-            existingImages
+          !existingProduct
+        ) {
+
+          console.warn(
+            `لم يتم العثور على المنتج: ${id}`
+          );
+
+          return false;
+        }
+
+        let imageUrl =
+          existingProduct.image_url ||
+          "";
+
+        let driveFileId =
+          existingProduct.drive_file_id ||
+          "";
+
+        /* =====================================================
+           IMAGE UPDATE
+           ===================================================== */
+
+        if (
+          updatedFields.image_url !==
+          undefined
+        ) {
+
+          const newImage =
+            updatedFields.image_url ||
+            "";
+
+          if (
+            isBase64Image(
+              newImage
+            )
+          ) {
+
+            const productName =
+              (
+                updatedFields.name ||
+                existingProduct.name ||
+                "منتج"
+              ).trim();
+
+            const sku =
+              (
+                updatedFields.sku ||
+                existingProduct.sku ||
+                `SKU-${Date.now()}`
+              ).trim();
+
+            const folderResult =
+              await createProductFolder(
+                productName,
+                sku
+              );
+
+            if (
+              !folderResult.success ||
+              !folderResult.folderId
+            ) {
+
+              console.error(
+                "فشل إنشاء مجلد المنتج أثناء التحديث:",
+                folderResult
+              );
+
+              return false;
+            }
+
+            const mimeType =
+              getMimeTypeFromDataUrl(
+                newImage
+              );
+
+            const fileName =
+              makeSafeImageFileName(
+                productName,
+                sku,
+                undefined,
+                mimeType
+              );
+
+            const uploadResult =
+              await uploadImageToDrive(
+                newImage,
+                fileName,
+                mimeType,
+                "product",
+                folderResult.folderId
+              );
+
+            if (
+              !uploadResult.success ||
+              !uploadResult.fileId
+            ) {
+
+              console.error(
+                "فشل رفع الصورة الجديدة:",
+                uploadResult
+              );
+
+              return false;
+            }
+
+            driveFileId =
+              uploadResult.fileId;
+
+            imageUrl =
+              uploadResult.directUrl ||
+              uploadResult.viewUrl ||
+              uploadResult.driveUrl ||
+              formatGoogleDriveDirectUrl(
+                driveFileId
+              );
+
+          } else {
+
+            const normalized =
+              normalizeProductImage(
+                newImage
+              );
+
+            imageUrl =
+              normalized.imageUrl;
+
+            driveFileId =
+              normalized.driveFileId ||
+              "";
+          }
+        }
+
+        /* =====================================================
+           CANONICAL V3 UPDATE
+           ===================================================== */
+
+        const mergedProduct =
+          buildCanonicalProduct({
+            ...existingProduct,
+
+            ...updatedFields,
+
+            id:
+              existingProduct.id,
+
+            product_id:
+              updatedFields.product_id ||
+              existingProduct.product_id,
+
+            sku:
+              updatedFields.sku ||
+              existingProduct.sku,
+
+            name:
+              updatedFields.name ||
+              existingProduct.name,
+
+            image_url:
+              imageUrl,
+
+            drive_file_id:
+              driveFileId,
+
+            created_at:
+              existingProduct.created_at,
+
+            updated_at:
+              new Date().toISOString(),
+          });
+
+        const updatedProducts =
+          currentProducts.map(
+            (product) =>
+              product.id ===
+              existingProduct.id
+                ? mergedProduct
+                : product
+          );
+
+        productsRef.current =
+          updatedProducts;
+
+        saveProductsCache(
+          updatedProducts
+        );
+
+        if (
+          driveFileId
+        ) {
+          saveProductImageRecord(
+            mergedProduct.id,
+            driveFileId,
+            imageUrl
+          );
+        }
+
+        setProducts(
+          updatedProducts
+        );
+
+        dispatchProductChanged();
+
+        console.log(
+          "ProductContext V3: تم تحديث المنتج:",
+          mergedProduct
+        );
+
+        return true;
+
+      } catch (error) {
+
+        console.error(
+          "حدث خطأ أثناء تحديث المنتج:",
+          error
+        );
+
+        return false;
+      }
+    };
+
+    /* =======================================================
+       UPDATE PRODUCT STOCK
+       ======================================================= */
+
+    /**
+     * IMPORTANT:
+     *
+     * This function does NOT modify Product.
+     *
+     * Real stock belongs to:
+     *
+     * inventory
+     * inventory_movements
+     *
+     * It remains only temporarily so existing UI components
+     * do not crash before InventoryContext is implemented.
+     */
+
+    const updateProductStock = (
+      id: string,
+      newStock: number
+    ) => {
+
+      try {
+
+        if (
+          !Number.isFinite(
+            newStock
           )
         ) {
-          const filteredImages =
-            existingImages.filter(
-              image =>
-                image?.product_id !==
-                id
+          return;
+        }
+
+        const product =
+          productsRef.current.find(
+            (item) =>
+              item.id === id ||
+              item.product_id === id
+          );
+
+        if (
+          !product
+        ) {
+
+          console.warn(
+            `لم يتم العثور على المنتج: ${id}`
+          );
+
+          return;
+        }
+
+        if (
+          newStock <= 5
+        ) {
+
+          notifyLowStock(
+            product as never
+          ).catch(
+            console.error
+          );
+        }
+
+        console.warn(
+          "ProductContext V3: المخزون لا يُخزن داخل products. سيتم نقله إلى InventoryContext."
+        );
+
+      } catch (error) {
+
+        console.error(
+          "خطأ في تحديث المخزون:",
+          error
+        );
+      }
+    };
+
+    /* =======================================================
+       BULK UPDATE
+       ======================================================= */
+
+    const updateProducts = (
+      updates: {
+        id: string;
+        product: Partial<StoreProduct>;
+      }[]
+    ) => {
+
+      try {
+
+        if (
+          !Array.isArray(
+            updates
+          ) ||
+          updates.length === 0
+        ) {
+          return;
+        }
+
+        const currentProducts =
+          productsRef.current;
+
+        const updateMap =
+          new Map<
+            string,
+            Partial<StoreProduct>
+          >();
+
+        updates.forEach(
+          (item) => {
+
+            if (
+              item?.id
+            ) {
+
+              updateMap.set(
+                item.id,
+                item.product
+              );
+            }
+          }
+        );
+
+        const now =
+          new Date().toISOString();
+
+        const updatedProducts =
+          currentProducts.map(
+            (product) => {
+
+              const update =
+                updateMap.get(
+                  product.id
+                );
+
+              if (!update) {
+                return product;
+              }
+
+              return buildCanonicalProduct({
+                ...product,
+
+                ...update,
+
+                id:
+                  product.id,
+
+                product_id:
+                  update.product_id ||
+                  product.product_id,
+
+                sku:
+                  update.sku ||
+                  product.sku,
+
+                name:
+                  update.name ||
+                  product.name,
+
+                created_at:
+                  product.created_at,
+
+                updated_at:
+                  now,
+              });
+            }
+          );
+
+        productsRef.current =
+          updatedProducts;
+
+        saveProductsCache(
+          updatedProducts
+        );
+
+        setProducts(
+          updatedProducts
+        );
+
+        dispatchProductChanged();
+
+        console.log(
+          "ProductContext V3: تم تحديث المنتجات:",
+          updatedProducts
+        );
+
+      } catch (error) {
+
+        console.error(
+          "خطأ في تحديث المنتجات:",
+          error
+        );
+      }
+    };
+
+    /* =======================================================
+       DELETE PRODUCT
+       ======================================================= */
+
+    const deleteProduct = (
+      id: string
+    ) => {
+
+      try {
+
+        const currentProducts =
+          productsRef.current;
+
+        const existingProduct =
+          currentProducts.find(
+            (product) =>
+              product.id === id ||
+              product.product_id === id
+          );
+
+        if (
+          !existingProduct
+        ) {
+
+          console.warn(
+            `لم يتم العثور على المنتج المطلوب حذفه: ${id}`
+          );
+
+          return;
+        }
+
+        const updatedProducts =
+          currentProducts.filter(
+            (product) =>
+              product.id !==
+              existingProduct.id
+          );
+
+        productsRef.current =
+          updatedProducts;
+
+        saveProductsCache(
+          updatedProducts
+        );
+
+        /* ===================================================
+           REMOVE LOCAL IMAGE METADATA ONLY
+           =================================================== */
+
+        try {
+
+          const existingImages =
+            safeGetJSON<
+              ProductImage[]
+            >(
+              PRODUCT_IMAGES_CACHE_KEY,
+              []
             );
 
-          try {
+          if (
+            Array.isArray(
+              existingImages
+            )
+          ) {
+
+            const filteredImages =
+              existingImages.filter(
+                (image) =>
+                  image?.product_id !==
+                  existingProduct.id
+              );
+
             localStorage.setItem(
               PRODUCT_IMAGES_CACHE_KEY,
               JSON.stringify(
                 filteredImages
               )
             );
-          } catch {
-            // ignore
           }
+
+        } catch {
+          // Ignore local image-cache errors.
         }
-      } catch {
-        // ignore
+
+        /*
+         * IMPORTANT:
+         *
+         * Do NOT delete the Google Drive file here.
+         *
+         * Drive deletion will be implemented separately
+         * with explicit backend ownership rules.
+         */
+
+        setProducts(
+          updatedProducts
+        );
+
+        dispatchProductChanged();
+
+        console.log(
+          "ProductContext V3: تم حذف المنتج محليًا:",
+          existingProduct.id
+        );
+
+      } catch (error) {
+
+        console.error(
+          "حدث خطأ أثناء حذف المنتج:",
+          error
+        );
       }
+    };
 
-      setProducts(
-        updatedProducts
-      );
+    /* =======================================================
+       PROVIDER
+       ======================================================= */
 
-      dispatchProductChanged();
-    } catch (error) {
-      console.error(
-        'حدث خطأ أثناء حذف المنتج:',
-        error
-      );
-    }
+    return (
+      <ProductContext.Provider
+        value={{
+          products,
+
+          addProduct,
+
+          updateProduct,
+
+          updateProducts,
+
+          updateProductStock,
+
+          deleteProduct,
+        }}
+      >
+        {children}
+      </ProductContext.Provider>
+    );
   };
-
-  /* =======================================================
-     PROVIDER
-     ======================================================= */
-
-  return (
-    <ProductContext.Provider
-      value={{
-        products,
-        addProduct,
-        updateProduct,
-        updateProducts,
-        updateProductStock,
-        deleteProduct
-      }}
-    >
-      {children}
-    </ProductContext.Provider>
-  );
-};
 
 /* =========================================================
    HOOK
    ========================================================= */
 
 export const useProducts =
-  () => {
+  (): ProductContextType => {
+
     const context =
       useContext(
         ProductContext
       );
 
     if (!context) {
+
       throw new Error(
-        'useProducts must be used within a ProductProvider'
+        "useProducts must be used within a ProductProvider"
       );
+
     }
 
     return context;

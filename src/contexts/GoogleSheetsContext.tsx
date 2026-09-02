@@ -48,13 +48,19 @@ interface UploadImageResult {
 
 interface GoogleSheetsContextType {
   config: GoogleSheetsConfig;
-  setConfig: React.Dispatch<React.SetStateAction<GoogleSheetsConfig>>;
+
+  setConfig: React.Dispatch<
+    React.SetStateAction<GoogleSheetsConfig>
+  >;
 
   isSyncing: boolean;
+
   lastSync: string | null;
+
   syncError: string | null;
 
   syncNow: () => Promise<boolean>;
+
   pullFromSheets: () => Promise<boolean>;
 
   createProductFolder: (
@@ -94,16 +100,93 @@ const DEFAULT_CONFIG: GoogleSheetsConfig = {
   categoriesFolderId:
     "1JfMshA_FjBRifRRqci0E-jZaoLhESWNl",
 
-  autoSync: true,
+  /*
+   * يبقى مغلقًا حتى يصبح Apps Script متوافقًا
+   * بالكامل مع Database V3.
+   */
+  autoSync: false,
 };
 
 /* ============================================================
-   STORAGE HELPERS
+   CONSTANTS
    ============================================================ */
 
-const CONFIG_KEY = "elites_google_sheets_config";
+const CONFIG_KEY =
+  "elites_google_sheets_config";
 
-function safeGetLocalStorage(key: string): string | null {
+const LAST_SYNC_KEY =
+  "elites_last_sync";
+
+const DATABASE_VERSION =
+  "3.0.0";
+
+/*
+ * مهم جدًا:
+ *
+ * لا نسمح للمزامنة بإرسال بيانات إلى Apps Script
+ * القديم أثناء مرحلة الانتقال.
+ *
+ * بعد تحديث Apps Script V3 سنغيّرها إلى true.
+ */
+const V3_SYNC_ENABLED = true;
+
+/* ============================================================
+   V3 DATABASE TABLES
+   ============================================================ */
+
+const V3_TABLE_NAMES = [
+  "products",
+  "product_variants",
+  "product_groups",
+  "categories",
+  "product_sources",
+  "product_images",
+  "price_history",
+  "suppliers",
+  "supplier_channels",
+  "supplier_product_discoveries",
+  "supplier_shipping_rates",
+  "supplier_transactions",
+  "warehouses",
+  "inventory",
+  "inventory_movements",
+  "customers",
+  "orders",
+  "order_items",
+  "fulfillments",
+  "returns",
+  "shipping_zones",
+  "shipping",
+  "payments",
+  "commissions",
+  "expenses",
+  "accounting_entries",
+  "tax_profiles",
+  "sales_channels",
+  "product_channel_listings",
+  "customer_messages",
+  "users",
+  "notifications",
+  "activity_log",
+  "store_settings",
+  "discounts",
+  "reviews",
+  "wishlists",
+  "media",
+  "currencies",
+  "exchange_rates",
+] as const;
+
+type V3TableName =
+  (typeof V3_TABLE_NAMES)[number];
+
+/* ============================================================
+   LOCAL STORAGE HELPERS
+   ============================================================ */
+
+function safeGetLocalStorage(
+  key: string
+): string | null {
   try {
     return localStorage.getItem(key);
   } catch {
@@ -116,18 +199,24 @@ function safeSetLocalStorage(
   value: string
 ): boolean {
   try {
-    localStorage.setItem(key, value);
+    localStorage.setItem(
+      key,
+      value
+    );
+
     return true;
   } catch {
     return false;
   }
 }
 
-function safeRemoveLocalStorage(key: string): void {
+function safeRemoveLocalStorage(
+  key: string
+): void {
   try {
     localStorage.removeItem(key);
   } catch {
-    // ignore
+    // Ignore storage errors.
   }
 }
 
@@ -136,32 +225,48 @@ function safeRemoveLocalStorage(key: string): void {
    ============================================================ */
 
 function cleanObjectForStorage(
-  value: any,
+  value: unknown,
   depth = 0
-): any {
+): unknown {
+  /*
+   * Prevent circular/deep structures from
+   * consuming LocalStorage.
+   */
   if (depth > 8) {
     return null;
   }
 
-  if (value === null || value === undefined) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
     return value;
   }
 
-  if (typeof value === "string") {
+  if (
+    typeof value ===
+    "string"
+  ) {
     /*
-     * لا نخزن الصور Base64 داخل localStorage.
+     * Never store Base64 images or Blob URLs.
      */
     if (
-      value.startsWith("data:image/") ||
+      value.startsWith(
+        "data:image/"
+      ) ||
       value.startsWith("blob:")
     ) {
       return "";
     }
 
     /*
-     * منع تخزين Base64 طويل جدًا.
+     * Additional protection against
+     * unexpectedly huge values.
      */
-    if (value.length > 500000) {
+    if (
+      value.length >
+      500000
+    ) {
       return "";
     }
 
@@ -169,42 +274,72 @@ function cleanObjectForStorage(
   }
 
   if (
-    typeof value === "number" ||
-    typeof value === "boolean"
+    typeof value ===
+      "number" ||
+    typeof value ===
+      "boolean"
   ) {
     return value;
   }
 
-  if (Array.isArray(value)) {
-    return value.map((item) =>
-      cleanObjectForStorage(item, depth + 1)
+  if (
+    Array.isArray(value)
+  ) {
+    return value.map(
+      (item) =>
+        cleanObjectForStorage(
+          item,
+          depth + 1
+        )
     );
   }
 
-  if (typeof value === "object") {
-    const result: Record<string, any> = {};
+  if (
+    typeof value ===
+    "object"
+  ) {
+    const result:
+      Record<
+        string,
+        unknown
+      > = {};
 
-    Object.keys(value).forEach((key) => {
-      const lower = key.toLowerCase();
+    Object.entries(
+      value as Record<
+        string,
+        unknown
+      >
+    ).forEach(
+      ([key, item]) => {
+        const lowerKey =
+          key.toLowerCase();
 
-      /*
-       * تجاهل البيانات الكبيرة المتعلقة بالصور.
-       */
-      if (
-        lower === "image_data" ||
-        lower === "imagedata" ||
-        lower === "base64" ||
-        lower === "preview" ||
-        lower === "blob"
-      ) {
-        return;
+        /*
+         * Binary/image payloads
+         * must never enter cache.
+         */
+        if (
+          lowerKey ===
+            "image_data" ||
+          lowerKey ===
+            "imagedata" ||
+          lowerKey ===
+            "base64" ||
+          lowerKey ===
+            "preview" ||
+          lowerKey ===
+            "blob"
+        ) {
+          return;
+        }
+
+        result[key] =
+          cleanObjectForStorage(
+            item,
+            depth + 1
+          );
       }
-
-      result[key] = cleanObjectForStorage(
-        value[key],
-        depth + 1
-      );
-    });
+    );
 
     return result;
   }
@@ -212,984 +347,1538 @@ function cleanObjectForStorage(
   return String(value);
 }
 
-function cleanArrayForStorage(data: any): any[] {
-  if (!Array.isArray(data)) {
+function cleanArrayForStorage(
+  data: unknown
+): unknown[] {
+  if (
+    !Array.isArray(data)
+  ) {
     return [];
   }
 
-  return data.map((item) =>
-    cleanObjectForStorage(item)
+  return data.map(
+    (item) =>
+      cleanObjectForStorage(
+        item
+      )
   );
 }
+
+/* ============================================================
+   V3 LOCAL CACHE KEYS
+   ============================================================ */
+
+/*
+ * هذه ليست أسماء Google Sheets.
+ *
+ * هي فقط مفاتيح LocalStorage المحلية.
+ *
+ * كل مفتاح مرتبط بجدول V3 واحد.
+ *
+ * لا نستخدم مفاتيح الجداول القديمة المختلفة
+ * كـ fallback، حتى لا نعيد إدخال بيانات Legacy
+ * إلى بنية V3.
+ */
+const LOCAL_V3_CACHE_KEYS:
+  Partial<
+    Record<
+      V3TableName,
+      string
+    >
+  > = {
+  products:
+    "elites_store_products",
+
+  product_variants:
+    "elites_product_variants",
+
+  product_groups:
+    "elites_product_groups",
+
+  categories:
+    "elites_categories",
+
+  product_sources:
+    "elites_product_sources",
+
+  product_images:
+    "elites_product_images",
+
+  price_history:
+    "elites_price_history",
+
+  suppliers:
+    "elites_suppliers",
+
+  supplier_channels:
+    "elites_supplier_channels",
+
+  supplier_product_discoveries:
+    "elites_supplier_product_discoveries",
+
+  supplier_shipping_rates:
+    "elites_supplier_shipping_rates",
+
+  supplier_transactions:
+    "elites_supplier_transactions",
+
+  warehouses:
+    "elites_warehouses",
+
+  inventory:
+    "elites_inventory",
+
+  inventory_movements:
+    "elites_inventory_movements",
+
+  customers:
+    "elites_customers",
+
+  orders:
+    "elites_orders",
+
+  order_items:
+    "elites_order_items",
+
+  fulfillments:
+    "elites_fulfillments",
+
+  returns:
+    "elites_returns",
+
+  shipping_zones:
+    "elites_shipping_zones",
+
+  shipping:
+    "elites_shipping",
+
+  payments:
+    "elites_payments",
+
+  commissions:
+    "elites_commissions",
+
+  expenses:
+    "elites_expenses",
+
+  accounting_entries:
+    "elites_accounting_entries",
+
+  tax_profiles:
+    "elites_tax_profiles",
+
+  sales_channels:
+    "elites_sales_channels",
+
+  product_channel_listings:
+    "elites_product_channel_listings",
+
+  customer_messages:
+    "elites_customer_messages",
+
+  users:
+    "elites_users",
+
+  notifications:
+    "elites_notifications",
+
+  activity_log:
+    "elites_activity_log",
+
+  store_settings:
+    "elites_store_settings",
+
+  discounts:
+    "elites_discounts",
+
+  reviews:
+    "elites_reviews",
+
+  wishlists:
+    "elites_wishlists",
+
+  media:
+    "elites_media",
+
+  currencies:
+    "elites_currencies",
+
+  exchange_rates:
+    "elites_exchange_rates",
+};
 
 /* ============================================================
    CONTEXT
    ============================================================ */
 
 const GoogleSheetsContext =
-  createContext<GoogleSheetsContextType | undefined>(
-    undefined
-  );
+  createContext<
+    GoogleSheetsContextType | undefined
+  >(undefined);
 
 /* ============================================================
    PROVIDER
    ============================================================ */
 
-export const GoogleSheetsProvider: React.FC<{
-  children: React.ReactNode;
-}> = ({ children }) => {
-  const [config, setConfig] =
-    useState<GoogleSheetsConfig>(() => {
-      try {
-        const saved =
-          safeGetLocalStorage(CONFIG_KEY);
-
-        if (saved) {
-          const parsed = JSON.parse(saved);
-
-          return {
-            ...DEFAULT_CONFIG,
-            ...parsed,
-          };
-        }
-      } catch {
-        // ignore
-      }
-
-      return DEFAULT_CONFIG;
-    });
-
-  const [isSyncing, setIsSyncing] =
-    useState(false);
-
-  const [lastSync, setLastSync] =
-    useState<string | null>(null);
-
-  const [syncError, setSyncError] =
-    useState<string | null>(null);
-
-  const syncingRef = useRef(false);
-
-  /* ==========================================================
-     SAVE CONFIG
-     ========================================================== */
-
-  useEffect(() => {
-    safeSetLocalStorage(
-      CONFIG_KEY,
-      JSON.stringify(config)
-    );
-  }, [config]);
-
-  /* ==========================================================
-     READ PRODUCTS CACHE
-     ========================================================== */
-
-  const readProducts = useCallback(() => {
-    try {
-      const raw =
-        safeGetLocalStorage(
-          "elites_store_products"
-        );
-
-      if (!raw) {
-        return [];
-      }
-
-      const parsed = JSON.parse(raw);
-
-      return Array.isArray(parsed)
-        ? parsed
-        : [];
-    } catch {
-      return [];
-    }
-  }, []);
-
-  /* ==========================================================
-     READ TABLE FROM LOCAL STORAGE
-     ========================================================== */
-
-  const readTable = useCallback(
-    (key: string) => {
-      try {
-        const raw =
-          safeGetLocalStorage(key);
-
-        if (!raw) {
-          return [];
-        }
-
-        const parsed = JSON.parse(raw);
-
-        return Array.isArray(parsed)
-          ? parsed
-          : [];
-      } catch {
-        return [];
-      }
-    },
-    []
-  );
-
-  /* ==========================================================
-     SYNC NOW
-     ========================================================== */
-
-  const syncNow =
-    useCallback(async (): Promise<boolean> => {
-      if (syncingRef.current) {
-        return false;
-      }
-
-      if (!config.webhookUrl) {
-        setSyncError(
-          "رابط Google Apps Script غير موجود"
-        );
-
-        return false;
-      }
-
-      syncingRef.current = true;
-      setIsSyncing(true);
-      setSyncError(null);
-
-      try {
-        const tables = {
-          Products: readProducts(),
-
-          Categories:
-            readTable(
-              "elites_categories"
-            ),
-
-          Suppliers:
-            readTable(
-              "elites_suppliers"
-            ),
-
-          Customers:
-            readTable(
-              "elites_customers"
-            ),
-
-          Orders:
-            readTable(
-              "elites_orders"
-            ),
-
-          Order_Items:
-            readTable(
-              "elites_order_items"
-            ),
-
-          Users:
-            readTable(
-              "elites_users"
-            ),
-
-          Reviews:
-            readTable(
-              "elites_reviews"
-            ),
-
-          Wishlists:
-            readTable(
-              "elites_wishlists"
-            ),
-
-          Notifications:
-            readTable(
-              "elites_notifications"
-            ),
-
-          Inventory_Movements:
-            readTable(
-              "elites_inventory_movements"
-            ),
-
-          Price_History:
-            readTable(
-              "elites_price_history"
-            ),
-
-          Accounting_Entries:
-            readTable(
-              "elites_accounting_entries"
-            ),
-
-          Payments:
-            readTable(
-              "elites_payments"
-            ),
-
-          Expenses:
-            readTable(
-              "elites_expenses"
-            ),
-
-          Returns:
-            readTable(
-              "elites_returns"
-            ),
-
-          Coupons:
-            readTable(
-              "elites_coupons"
-            ),
-
-          Shipping:
-            readTable(
-              "elites_shipping"
-            ),
-
-          Product_Images:
-            readTable(
-              "elites_product_images"
-            ),
-
-          Media_Library:
-            readTable(
-              "elites_media_library"
-            ),
-
-          Settings:
-            readTable(
-              "elites_settings"
-            ),
-
-          Wishlist_Items:
-            readTable(
-              "elites_wishlist_items"
-            ),
-        };
-
-        /*
-         * تنظيف البيانات قبل إرسالها.
-         */
-        const cleanedTables: Record<
-          string,
-          any[]
-        > = {};
-
-        Object.keys(tables).forEach(
-          (tableName) => {
-            cleanedTables[tableName] =
-              cleanArrayForStorage(
-                tables[
-                  tableName as keyof typeof tables
-                ]
+export const GoogleSheetsProvider:
+  React.FC<{
+    children: React.ReactNode;
+  }> = ({
+    children,
+  }) => {
+    const [
+      config,
+      setConfig,
+    ] =
+      useState<GoogleSheetsConfig>(
+        () => {
+          try {
+            const saved =
+              safeGetLocalStorage(
+                CONFIG_KEY
               );
-          }
-        );
 
-        const payload = {
-          action: "sync_all_tables",
+            if (
+              saved
+            ) {
+              const parsed =
+                JSON.parse(
+                  saved
+                );
 
-          timestamp:
-            new Date().toISOString(),
-
-          tables: cleanedTables,
-        };
-
-        /*
-         * مزامنة البيانات.
-         *
-         * نستخدم no-cors هنا لأننا لا نحتاج
-         * إلى قراءة محتوى الاستجابة.
-         */
-        await fetch(config.webhookUrl, {
-          method: "POST",
-          mode: "no-cors",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const now =
-          new Date().toISOString();
-
-        setLastSync(now);
-
-        safeSetLocalStorage(
-          "elites_last_sync",
-          now
-        );
-
-        return true;
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : String(error);
-
-        console.error(
-          "Google Sheets sync error:",
-          error
-        );
-
-        setSyncError(message);
-
-        return false;
-      } finally {
-        syncingRef.current = false;
-        setIsSyncing(false);
-      }
-    }, [
-      config.webhookUrl,
-      readProducts,
-      readTable,
-    ]);
-
-  /* ==========================================================
-     CREATE PRODUCT FOLDER
-     ========================================================== */
-
-  const createProductFolder =
-    useCallback(
-      async (
-        productName: string,
-        sku: string
-      ): Promise<CreateProductFolderResult> => {
-        try {
-          if (!config.webhookUrl) {
-            return {
-              success: false,
-              error:
-                "رابط Google Apps Script غير موجود",
-            };
-          }
-
-          if (
-            !productName &&
-            !sku
-          ) {
-            return {
-              success: false,
-              error:
-                "اسم المنتج أو SKU مطلوب",
-            };
-          }
-
-          const payload = {
-            action:
-              "create_product_folder",
-
-            productName:
-              productName || "",
-
-            sku:
-              sku || "",
-          };
-
-          const response =
-            await fetch(
-              config.webhookUrl,
-              {
-                method: "POST",
+              return {
+                ...DEFAULT_CONFIG,
+                ...parsed,
 
                 /*
-                 * text/plain يقلل مشاكل
-                 * CORS / preflight مع Apps Script.
-                 *
-                 * Apps Script سيقرأ JSON من
-                 * e.postData.contents.
+                 * لا نسمح لأي إعداد قديم
+                 * بتشغيل Auto Sync.
                  */
-                headers: {
-                  "Content-Type":
-                    "text/plain;charset=utf-8",
-                },
-
-                body:
-                  JSON.stringify(
-                    payload
-                  ),
-              }
-            );
-
-          if (!response.ok) {
-            throw new Error(
-              `HTTP ${response.status}`
-            );
-          }
-
-          const text =
-            await response.text();
-
-          if (!text) {
-            throw new Error(
-              "Google Apps Script أعاد استجابة فارغة."
-            );
-          }
-
-          let result: any;
-
-          try {
-            result =
-              JSON.parse(text);
-          } catch {
-            console.error(
-              "Invalid Apps Script response:",
-              text
-            );
-
-            throw new Error(
-              "استجابة Google Apps Script ليست JSON صحيحة."
-            );
-          }
-
-          console.log(
-            "Create product folder response:",
-            result
-          );
-
-          if (
-            result.status !==
-            "success"
-          ) {
-            return {
-              success: false,
-              error:
-                result.message ||
-                result.error ||
-                "فشل إنشاء مجلد المنتج",
-            };
-          }
-
-          if (
-            !result.folderId
-          ) {
-            return {
-              success: false,
-              error:
-                "تم إنشاء الطلب لكن لم يُرجع Google Drive معرف المجلد الحقيقي.",
-            };
-          }
-
-          return {
-            success: true,
-
-            folderId:
-              result.folderId,
-
-            folderName:
-              result.folderName,
-
-            folderUrl:
-              result.folderUrl,
-          };
-        } catch (error) {
-          console.error(
-            "createProductFolder error:",
-            error
-          );
-
-          return {
-            success: false,
-
-            error:
-              error instanceof Error
-                ? error.message
-                : String(error),
-          };
-        }
-      },
-      [config.webhookUrl]
-    );
-
-  /* ==========================================================
-     UPLOAD IMAGE TO DRIVE
-     ========================================================== */
-
-  const uploadImageToDrive =
-    useCallback(
-      async (
-        base64Data: string,
-        fileName: string,
-        mimeType = "image/jpeg",
-        targetType = "product",
-        folderId?: string
-      ): Promise<UploadImageResult> => {
-        try {
-          if (!config.webhookUrl) {
-            return {
-              success: false,
-              error:
-                "رابط Google Apps Script غير موجود",
-            };
-          }
-
-          if (!base64Data) {
-            return {
-              success: false,
-              error:
-                "بيانات الصورة فارغة",
-            };
-          }
-
-          /*
-           * التأكد من أن البيانات فعلًا
-           * صورة Base64.
-           */
-          if (
-            !base64Data.startsWith(
-              "data:image/"
-            )
-          ) {
-            return {
-              success: false,
-              error:
-                "بيانات الصورة ليست Data URL صالحة.",
-            };
-          }
-
-          const payload: Record<
-            string,
-            any
-          > = {
-            action:
-              "upload_image_to_drive",
-
-            base64Data,
-
-            fileName:
-              fileName ||
-              "product-image.jpg",
-
-            mimeType:
-              mimeType ||
-              "image/jpeg",
-
-            targetType:
-              targetType ||
-              "product",
-          };
-
-          /*
-           * مجلد المنتج الحقيقي.
-           */
-          if (folderId) {
-            payload.folderId =
-              folderId;
-          }
-
-          console.log(
-            "Uploading image to Google Drive...",
-            {
-              fileName,
-              mimeType,
-              targetType,
-              folderId,
-              base64Length:
-                base64Data.length,
+                autoSync: false,
+              };
             }
+          } catch {
+            // Ignore invalid configuration.
+          }
+
+          return DEFAULT_CONFIG;
+        }
+      );
+
+    const [
+      isSyncing,
+      setIsSyncing,
+    ] = useState(false);
+
+    const [
+      lastSync,
+      setLastSync,
+    ] =
+      useState<
+        string | null
+      >(null);
+
+    const [
+      syncError,
+      setSyncError,
+    ] =
+      useState<
+        string | null
+      >(null);
+
+    const syncingRef =
+      useRef(false);
+
+    /* ========================================================
+       SAVE CONFIG
+       ======================================================== */
+
+    useEffect(() => {
+      safeSetLocalStorage(
+        CONFIG_KEY,
+        JSON.stringify(
+          config
+        )
+      );
+    }, [config]);
+
+    /* ========================================================
+       READ V3 LOCAL TABLE
+       ======================================================== */
+
+    const readTable =
+      useCallback(
+        (
+          tableName: V3TableName
+        ): unknown[] => {
+          const key =
+            LOCAL_V3_CACHE_KEYS[
+              tableName
+            ];
+
+          if (!key) {
+            return [];
+          }
+
+          try {
+            const raw =
+              safeGetLocalStorage(
+                key
+              );
+
+            if (!raw) {
+              return [];
+            }
+
+            const parsed =
+              JSON.parse(
+                raw
+              );
+
+            if (
+              Array.isArray(
+                parsed
+              )
+            ) {
+              return parsed;
+            }
+          } catch (
+            error
+          ) {
+            console.warn(
+              `تعذر قراءة جدول V3 المحلي: ${tableName}`,
+              error
+            );
+          }
+
+          return [];
+        },
+        []
+      );
+
+    /* ========================================================
+       BUILD V3 PAYLOAD
+       ======================================================== */
+
+    const buildV3TablesPayload =
+      useCallback(() => {
+        const tables:
+          Partial<
+            Record<
+              V3TableName,
+              unknown[]
+            >
+          > = {};
+
+        V3_TABLE_NAMES.forEach(
+          (
+            tableName
+          ) => {
+            const data =
+              readTable(
+                tableName
+              );
+
+            /*
+             * لا نرسل جدولًا فارغًا.
+             *
+             * هذا مهم جدًا لأننا لا نريد
+             * أن يتحول الجدول الفارغ إلى
+             * عملية حذف/مسح في backend.
+             */
+            if (
+              data.length >
+              0
+            ) {
+              tables[
+                tableName
+              ] =
+                cleanArrayForStorage(
+                  data
+                );
+            }
+          }
+        );
+
+        return tables;
+      }, [readTable]);
+
+    /* ========================================================
+       SYNC NOW
+       ======================================================== */
+
+    const syncNow =
+      useCallback(
+        async (): Promise<boolean> => {
+          /*
+           * حماية من الضغط المتكرر.
+           */
+          if (
+            syncingRef.current
+          ) {
+            return false;
+          }
+
+          /*
+           * V3 backend غير مفعّل بعد.
+           *
+           * نرفض المزامنة بدل إرسال payload
+           * إلى Apps Script القديم.
+           */
+          if (
+            !V3_SYNC_ENABLED
+          ) {
+            const message =
+              "مزامنة Google Sheets V3 متوقفة مؤقتًا حتى يتم تحديث Apps Script إلى API V3.";
+
+            console.info(
+              message
+            );
+
+            setSyncError(
+              message
+            );
+
+            return false;
+          }
+
+          if (
+            !config.webhookUrl
+          ) {
+            const message =
+              "رابط Google Apps Script غير موجود.";
+
+            setSyncError(
+              message
+            );
+
+            return false;
+          }
+
+          syncingRef.current =
+            true;
+
+          setIsSyncing(
+            true
           );
 
-          const response =
-            await fetch(
-              config.webhookUrl,
+          setSyncError(
+            null
+          );
+
+          try {
+            const tables =
+              buildV3TablesPayload();
+
+            const tableNames =
+              Object.keys(
+                tables
+              );
+
+            if (
+              tableNames.length ===
+              0
+            ) {
+              console.info(
+                "Google Sheets V3: لا توجد بيانات محلية جاهزة للمزامنة."
+              );
+
+              return true;
+            }
+
+            const payload = {
+              action:
+                "sync_all_tables",
+
+              schemaVersion:
+                DATABASE_VERSION,
+
+              timestamp:
+                new Date().toISOString(),
+
+              tables,
+            };
+
+            console.log(
+              "Google Sheets V3 sync:",
               {
-                method: "POST",
+                schemaVersion:
+                  DATABASE_VERSION,
 
-                /*
-                 * مهم مع Google Apps Script.
-                 */
-                headers: {
-                  "Content-Type":
-                    "text/plain;charset=utf-8",
-                },
+                tables:
+                  tableNames,
 
-                body:
-                  JSON.stringify(
-                    payload
-                  ),
+                count:
+                  tableNames.length,
               }
             );
 
-          if (!response.ok) {
-            throw new Error(
-              `HTTP ${response.status}`
-            );
-          }
+            const response =
+              await fetch(
+                config.webhookUrl,
+                {
+                  method:
+                    "POST",
 
-          const text =
-            await response.text();
+                  headers: {
+                    "Content-Type":
+                      "text/plain;charset=utf-8",
+                  },
 
-          if (!text) {
-            throw new Error(
-              "Google Apps Script أعاد استجابة فارغة أثناء رفع الصورة."
-            );
-          }
+                  body:
+                    JSON.stringify(
+                      payload
+                    ),
+                }
+              );
 
-          let result: any;
+            if (
+              !response.ok
+            ) {
+              throw new Error(
+                `HTTP ${response.status}`
+              );
+            }
 
-          try {
-            result =
-              JSON.parse(text);
-          } catch {
-            console.error(
-              "Invalid Apps Script upload response:",
-              text
-            );
+            let result:
+              any = null;
 
-            throw new Error(
-              "استجابة Google Apps Script أثناء رفع الصورة ليست JSON صحيحة."
-            );
-          }
+            try {
+              const text =
+                await response.text();
 
-          console.log(
-            "Upload image response:",
-            result
-          );
+              if (
+                text
+              ) {
+                result =
+                  JSON.parse(
+                    text
+                  );
+              }
+            } catch {
+              /*
+               * لا نعتمد على parsing
+               * إذا كان الرد غير قابل للقراءة.
+               */
+            }
 
-          if (
-            result.status !==
-            "success"
-          ) {
-            return {
-              success: false,
-
-              error:
+            if (
+              result &&
+              (
+                result.success === false ||
+                result.status === "error"
+              )
+            ) {
+              throw new Error(
                 result.message ||
-                result.error ||
-                "فشل رفع الصورة إلى Google Drive",
-            };
-          }
+                  result.error ||
+                  "فشلت مزامنة Google Sheets."
+              );
+            }
 
-          /*
-           * يجب أن يكون هذا ID حقيقيًا
-           * صادرًا من DriveApp.
-           */
-          const fileId =
-            result.fileId ||
-            extractGoogleDriveId(
-              result.directUrl ||
-                result.viewUrl ||
-                result.driveUrl ||
-                result.url ||
-                ""
+            if (
+              result &&
+              result.schemaVersion &&
+              result.schemaVersion !==
+                DATABASE_VERSION
+            ) {
+              throw new Error(
+                `إصدار قاعدة البيانات غير متطابق. المتوقع ${DATABASE_VERSION}، والمستلم ${result.schemaVersion}.`
+              );
+            }
+
+            const now =
+              new Date().toISOString();
+
+            setLastSync(
+              now
             );
 
-          /*
-           * لا نسمح إطلاقًا بمتابعة العملية
-           * بدون fileId حقيقي.
-           */
-          if (!fileId) {
+            safeSetLocalStorage(
+              LAST_SYNC_KEY,
+              now
+            );
+
+            return true;
+          } catch (
+            error
+          ) {
+            const message =
+              error instanceof
+              Error
+                ? error.message
+                : String(
+                    error
+                  );
+
             console.error(
-              "Upload response contains no real fileId:",
-              result
+              "Google Sheets V3 sync error:",
+              error
+            );
+
+            setSyncError(
+              message
+            );
+
+            return false;
+          } finally {
+            syncingRef.current =
+              false;
+
+            setIsSyncing(
+              false
+            );
+          }
+        },
+        [
+          config.webhookUrl,
+          buildV3TablesPayload,
+        ]
+      );
+
+    /* ========================================================
+       CREATE PRODUCT FOLDER
+       ======================================================== */
+
+    const createProductFolder =
+      useCallback(
+        async (
+          productName: string,
+          sku: string
+        ): Promise<
+          CreateProductFolderResult
+        > => {
+          try {
+            if (
+              !config.webhookUrl
+            ) {
+              return {
+                success:
+                  false,
+
+                error:
+                  "رابط Google Apps Script غير موجود.",
+              };
+            }
+
+            if (
+              !productName &&
+              !sku
+            ) {
+              return {
+                success:
+                  false,
+
+                error:
+                  "اسم المنتج أو SKU مطلوب.",
+              };
+            }
+
+            const payload = {
+              action:
+                "create_product_folder",
+
+              productName:
+                productName ||
+                "",
+
+              sku:
+                sku || "",
+            };
+
+            const response =
+              await fetch(
+                config.webhookUrl,
+                {
+                  method:
+                    "POST",
+
+                  headers: {
+                    "Content-Type":
+                      "text/plain;charset=utf-8",
+                  },
+
+                  body:
+                    JSON.stringify(
+                      payload
+                    ),
+                }
+              );
+
+            if (
+              !response.ok
+            ) {
+              throw new Error(
+                `HTTP ${response.status}`
+              );
+            }
+
+            const text =
+              await response.text();
+
+            if (
+              !text
+            ) {
+              throw new Error(
+                "Google Apps Script أعاد استجابة فارغة."
+              );
+            }
+
+            let result:
+              any;
+
+            try {
+              result =
+                JSON.parse(
+                  text
+                );
+            } catch {
+              console.error(
+                "Invalid Apps Script response:",
+                text
+              );
+
+              throw new Error(
+                "استجابة Google Apps Script ليست JSON صحيحة."
+              );
+            }
+
+            if (
+              result.status !==
+              "success"
+            ) {
+              return {
+                success:
+                  false,
+
+                error:
+                  result.message ||
+                  result.error ||
+                  "فشل إنشاء مجلد المنتج.",
+              };
+            }
+
+            if (
+              !result.folderId
+            ) {
+              return {
+                success:
+                  false,
+
+                error:
+                  "لم يُرجع Google Drive معرف المجلد الحقيقي.",
+              };
+            }
+
+            return {
+              success:
+                true,
+
+              folderId:
+                result.folderId,
+
+              folderName:
+                result.folderName,
+
+              folderUrl:
+                result.folderUrl,
+            };
+          } catch (
+            error
+          ) {
+            console.error(
+              "createProductFolder error:",
+              error
             );
 
             return {
-              success: false,
+              success:
+                false,
 
               error:
-                "تمت معالجة طلب رفع الصورة، لكن Google Drive لم يُرجع fileId حقيقيًا.",
+                error instanceof
+                Error
+                  ? error.message
+                  : String(
+                      error
+                    ),
             };
           }
+        },
+        [config.webhookUrl]
+      );
 
-          /*
-           * الرابط المباشر للصورة.
-           */
-          const directUrl =
-            result.directUrl ||
-            formatGoogleDriveDirectUrl(
-              fileId
-            );
+    /* ========================================================
+       UPLOAD IMAGE TO DRIVE
+       ======================================================== */
 
-          /*
-           * رابط العرض.
-           */
-          const viewUrl =
-            result.viewUrl ||
-            `https://drive.google.com/uc?export=view&id=${fileId}`;
-
-          /*
-           * رابط ملف Drive.
-           */
-          const driveUrl =
-            result.driveUrl ||
-            `https://drive.google.com/file/d/${fileId}/view`;
-
-          /*
-           * Preview مؤقت فقط في sessionStorage.
-           *
-           * لا نضع Base64 في localStorage.
-           */
+    const uploadImageToDrive =
+      useCallback(
+        async (
+          base64Data: string,
+          fileName: string,
+          mimeType = "image/jpeg",
+          targetType = "product",
+          folderId?: string
+        ): Promise<
+          UploadImageResult
+        > => {
           try {
-            cacheDriveImagePreview(
-              fileId,
-              base64Data
-            );
-          } catch (cacheError) {
-            console.warn(
-              "Could not cache image preview:",
-              cacheError
-            );
-          }
+            if (
+              !config.webhookUrl
+            ) {
+              return {
+                success:
+                  false,
 
-          console.log(
-            "Google Drive upload successful:",
-            {
+                error:
+                  "رابط Google Apps Script غير موجود.",
+              };
+            }
+
+            if (
+              !base64Data
+            ) {
+              return {
+                success:
+                  false,
+
+                error:
+                  "بيانات الصورة فارغة.",
+              };
+            }
+
+            if (
+              !base64Data.startsWith(
+                "data:image/"
+              )
+            ) {
+              return {
+                success:
+                  false,
+
+                error:
+                  "بيانات الصورة ليست Data URL صالحة.",
+              };
+            }
+
+            const payload:
+              Record<
+                string,
+                unknown
+              > = {
+              action:
+                "upload_image_to_drive",
+
+              base64Data,
+
+              fileName:
+                fileName ||
+                "product-image.jpg",
+
+              mimeType:
+                mimeType ||
+                "image/jpeg",
+
+              targetType:
+                targetType ||
+                "product",
+            };
+
+            if (
+              folderId
+            ) {
+              payload.folderId =
+                folderId;
+            }
+
+            console.log(
+              "Uploading image to Google Drive:",
+              {
+                fileName,
+                mimeType,
+                targetType,
+                folderId,
+                base64Length:
+                  base64Data.length,
+              }
+            );
+
+            const response =
+              await fetch(
+                config.webhookUrl,
+                {
+                  method:
+                    "POST",
+
+                  headers: {
+                    "Content-Type":
+                      "text/plain;charset=utf-8",
+                  },
+
+                  body:
+                    JSON.stringify(
+                      payload
+                    ),
+                }
+              );
+
+            if (
+              !response.ok
+            ) {
+              throw new Error(
+                `HTTP ${response.status}`
+              );
+            }
+
+            const text =
+              await response.text();
+
+            if (
+              !text
+            ) {
+              throw new Error(
+                "Google Apps Script أعاد استجابة فارغة أثناء رفع الصورة."
+              );
+            }
+
+            let result:
+              any;
+
+            try {
+              result =
+                JSON.parse(
+                  text
+                );
+            } catch {
+              console.error(
+                "Invalid Apps Script upload response:",
+                text
+              );
+
+              throw new Error(
+                "استجابة Google Apps Script أثناء رفع الصورة ليست JSON صحيحة."
+              );
+            }
+
+            if (
+              result.status !==
+              "success"
+            ) {
+              return {
+                success:
+                  false,
+
+                error:
+                  result.message ||
+                  result.error ||
+                  "فشل رفع الصورة إلى Google Drive.",
+              };
+            }
+
+            /*
+             * لا نقبل نجاحًا بدون fileId حقيقي.
+             */
+            const fileId =
+              result.fileId ||
+              extractGoogleDriveId(
+                result.directUrl ||
+                  result.viewUrl ||
+                  result.driveUrl ||
+                  result.url ||
+                  ""
+              );
+
+            if (
+              !fileId
+            ) {
+              console.error(
+                "Upload response contains no real fileId:",
+                result
+              );
+
+              return {
+                success:
+                  false,
+
+                error:
+                  "لم يُرجع Google Drive fileId حقيقيًا.",
+              };
+            }
+
+            const directUrl =
+              result.directUrl ||
+              formatGoogleDriveDirectUrl(
+                fileId
+              );
+
+            const viewUrl =
+              result.viewUrl ||
+              `https://drive.google.com/uc?export=view&id=${fileId}`;
+
+            const driveUrl =
+              result.driveUrl ||
+              `https://drive.google.com/file/d/${fileId}/view`;
+
+            /*
+             * Preview cache في sessionStorage فقط.
+             *
+             * لا يدخل إلى LocalStorage.
+             */
+            try {
+              cacheDriveImagePreview(
+                fileId,
+                base64Data
+              );
+            } catch (
+              cacheError
+            ) {
+              console.warn(
+                "تعذر حفظ معاينة الصورة مؤقتًا:",
+                cacheError
+              );
+            }
+
+            return {
+              success:
+                true,
+
               fileId,
+
               fileName:
                 result.fileName ||
                 fileName,
+
+              driveUrl,
+
+              directUrl,
+
+              viewUrl,
+
+              mimeType:
+                result.mimeType ||
+                mimeType,
+
               folderId:
                 result.folderId ||
                 folderId,
-              directUrl,
-            }
-          );
 
-          return {
-            success: true,
-
-            fileId,
-
-            fileName:
-              result.fileName ||
-              fileName,
-
-            driveUrl,
-
-            directUrl,
-
-            viewUrl,
-
-            mimeType:
-              result.mimeType ||
-              mimeType,
-
-            folderId:
-              result.folderId ||
-              folderId,
-
-            folderUrl:
-              result.folderUrl,
-          };
-        } catch (error) {
-          console.error(
-            "uploadImageToDrive error:",
+              folderUrl:
+                result.folderUrl,
+            };
+          } catch (
             error
-          );
+          ) {
+            console.error(
+              "uploadImageToDrive error:",
+              error
+            );
 
-          return {
-            success: false,
+            return {
+              success:
+                false,
 
-            error:
-              error instanceof Error
-                ? error.message
-                : String(error),
-          };
-        }
-      },
-      [config.webhookUrl]
-    );
+              error:
+                error instanceof
+                Error
+                  ? error.message
+                  : String(
+                      error
+                    ),
+            };
+          }
+        },
+        [config.webhookUrl]
+      );
 
-  /* ==========================================================
-     FETCH FOLDER IMAGES
-     ========================================================== */
+    /* ========================================================
+       FETCH FOLDER IMAGES
+       ======================================================== */
 
-  const fetchFolderImages =
-    useCallback(
-      async (
-        folderId: string
-      ): Promise<any[]> => {
-        try {
-          if (!folderId) {
+    const fetchFolderImages =
+      useCallback(
+        async (
+          folderId: string
+        ): Promise<
+          any[]
+        > => {
+          try {
+            if (
+              !folderId ||
+              !config.webhookUrl
+            ) {
+              return [];
+            }
+
+            const response =
+              await fetch(
+                config.webhookUrl,
+                {
+                  method:
+                    "POST",
+
+                  headers: {
+                    "Content-Type":
+                      "text/plain;charset=utf-8",
+                  },
+
+                  body:
+                    JSON.stringify({
+                      action:
+                        "fetch_folder_images",
+
+                      folderId,
+                    }),
+                }
+              );
+
+            if (
+              !response.ok
+            ) {
+              throw new Error(
+                `HTTP ${response.status}`
+              );
+            }
+
+            const text =
+              await response.text();
+
+            if (
+              !text
+            ) {
+              return [];
+            }
+
+            let result:
+              any;
+
+            try {
+              result =
+                JSON.parse(
+                  text
+                );
+            } catch {
+              console.error(
+                "Invalid fetchFolderImages response:",
+                text
+              );
+
+              return [];
+            }
+
+            if (
+              result.status !==
+              "success"
+            ) {
+              console.error(
+                "fetchFolderImages failed:",
+                result
+              );
+
+              return [];
+            }
+
+            return Array.isArray(
+              result.files
+            )
+              ? result.files
+              : [];
+          } catch (
+            error
+          ) {
+            console.error(
+              "fetchFolderImages error:",
+              error
+            );
+
             return [];
           }
+        },
+        [config.webhookUrl]
+      );
 
-          const response =
-            await fetch(
-              config.webhookUrl,
-              {
-                method: "POST",
+    /* ========================================================
+       PULL FROM SHEETS
+       ======================================================== */
 
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                },
+    const pullFromSheets =
+      useCallback(
+        async (): Promise<boolean> => {
+          try {
+            if (!V3_SYNC_ENABLED) {
+              console.info(
+                "Google Sheets V3: القراءة غير مفعلة."
+              );
 
-                body: JSON.stringify({
-                  action:
-                    "fetch_folder_images",
+              return false;
+            }
 
-                  folderId,
-                }),
+            if (!config.webhookUrl) {
+              setSyncError(
+                "رابط Google Apps Script غير موجود."
+              );
+
+              return false;
+            }
+
+            setSyncError(null);
+
+            console.log(
+              "Google Sheets V3: بدء تحميل البيانات من Sheets..."
+            );
+
+            const url =
+              `${config.webhookUrl}?action=get_all_tables`;
+
+            const response =
+              await fetch(url, {
+                method: "GET",
+              });
+
+            if (!response.ok) {
+              throw new Error(
+                `HTTP ${response.status}`
+              );
+            }
+
+            const text =
+              await response.text();
+
+            if (!text) {
+              throw new Error(
+                "Google Apps Script أعاد استجابة فارغة."
+              );
+            }
+
+            let result: any;
+
+            try {
+              result =
+                JSON.parse(text);
+            } catch {
+              console.error(
+                "Invalid Google Sheets V3 response:",
+                text
+              );
+
+              throw new Error(
+                "استجابة Google Sheets V3 ليست JSON صحيحة."
+              );
+            }
+
+            /*
+             * التحقق من نجاح API.
+             */
+            if (
+              result.success === false ||
+              result.status === "error"
+            ) {
+              throw new Error(
+                result.message ||
+                  result.error ||
+                  "فشل تحميل البيانات من Google Sheets."
+              );
+            }
+
+            /*
+             * التحقق من إصدار قاعدة البيانات.
+             */
+            if (
+              result.schemaVersion &&
+              result.schemaVersion !==
+                DATABASE_VERSION
+            ) {
+              throw new Error(
+                `إصدار قاعدة البيانات غير متطابق. المتوقع ${DATABASE_VERSION}، والمستلم ${result.schemaVersion}.`
+              );
+            }
+
+            /*
+             * بعض نسخ API قد تضع tables مباشرة،
+             * وبعضها قد تضعها داخل data.
+             */
+            const tables =
+              result.tables ||
+              result.data?.tables;
+
+            if (
+              !tables ||
+              typeof tables !== "object"
+            ) {
+              throw new Error(
+                "لم يتم العثور على جداول V3 في استجابة Google Sheets."
+              );
+            }
+
+            let savedTables = 0;
+            let savedRecords = 0;
+
+            /*
+             * Google Sheets هو المصدر الرسمي للبيانات.
+             *
+             * لذلك نستبدل الكاش المحلي ببيانات Sheets.
+             */
+            V3_TABLE_NAMES.forEach(
+              (tableName) => {
+                const key =
+                  LOCAL_V3_CACHE_KEYS[
+                    tableName
+                  ];
+
+                if (!key) {
+                  return;
+                }
+
+                const tableData =
+                  tables[tableName];
+
+                /*
+                 * إذا كان الجدول موجودًا في الرد
+                 * نحفظه حتى لو كان فارغًا.
+                 *
+                 * هذا مهم لأن Sheets هو المصدر الرسمي.
+                 */
+                if (
+                  Array.isArray(
+                    tableData
+                  )
+                ) {
+                  const cleaned =
+                    cleanArrayForStorage(
+                      tableData
+                    );
+
+                  const saved =
+                    safeSetLocalStorage(
+                      key,
+                      JSON.stringify(
+                        cleaned
+                      )
+                    );
+
+                  if (!saved) {
+                    throw new Error(
+                      `تعذر حفظ جدول ${tableName} في LocalStorage.`
+                    );
+                  }
+
+                  savedTables++;
+                  savedRecords +=
+                    cleaned.length;
+                }
               }
             );
 
-          if (!response.ok) {
-            throw new Error(
-              `HTTP ${response.status}`
+            const now =
+              new Date().toISOString();
+
+            setLastSync(now);
+
+            safeSetLocalStorage(
+              LAST_SYNC_KEY,
+              now
             );
-          }
 
-          const result =
-            await response.json();
+            console.log(
+              "Google Sheets V3: تم تحميل البيانات بنجاح.",
+              {
+                tables:
+                  savedTables,
 
-          if (
-            result.status !==
-            "success"
-          ) {
+                records:
+                  savedRecords,
+              }
+            );
+
+            /*
+             * إبلاغ باقي التطبيق بأن البيانات
+             * المحلية تم تحديثها من Sheets.
+             */
+            try {
+              window.dispatchEvent(
+                new Event(
+                  "elites_data_pulled"
+                )
+              );
+            } catch {
+              // Ignore event errors.
+            }
+
+            return true;
+
+          } catch (error) {
+
+            const message =
+              error instanceof Error
+                ? error.message
+                : String(error);
+
             console.error(
-              "fetchFolderImages failed:",
-              result
+              "Google Sheets V3 pull error:",
+              error
             );
 
-            return [];
+            setSyncError(
+              message
+            );
+
+            return false;
           }
+        },
+        [config.webhookUrl]
+      );
 
-          return Array.isArray(
-            result.files
-          )
-            ? result.files
-            : [];
-        } catch (error) {
-          console.error(
-            "fetchFolderImages error:",
+    /* ========================================================
+       TRIGGER SYNC
+       ======================================================== */
+
+    const triggerSync =
+      useCallback(
+        () => {
+          try {
+            window.dispatchEvent(
+              new CustomEvent(
+                "elites_trigger_sync"
+              )
+            );
+          } catch (
             error
-          );
+          ) {
+            console.warn(
+              "تعذر إرسال حدث المزامنة:",
+              error
+            );
+          }
+        },
+        []
+      );
 
-          return [];
-        }
-      },
-      [config.webhookUrl]
-    );
+    /* ========================================================
+       LOAD LAST SYNC
+       ======================================================== */
 
-  /* ==========================================================
-     PULL FROM SHEETS
-     ========================================================== */
+    useEffect(() => {
+      const saved =
+        safeGetLocalStorage(
+          LAST_SYNC_KEY
+        );
 
-  const pullFromSheets =
-    useCallback(async (): Promise<boolean> => {
+      if (
+        saved
+      ) {
+        setLastSync(
+          saved
+        );
+      }
+    }, []);
+
+    /* ========================================================
+       AUTO SYNC LISTENER
+       ======================================================== */
+
+    useEffect(() => {
       /*
-       * Apps Script الحالي لا يحتوي على
-       * get_all_tables.
-       *
-       * لذلك لا نقوم بعمل طلب وهمي.
-       *
-       * يمكن إضافة هذا لاحقًا عندما نجهز
-       * endpoint للقراءة من Sheets.
+       * Auto Sync يبقى مغلقًا أثناء بناء V3.
        */
-
-      console.warn(
-        "pullFromSheets: get_all_tables غير مفعّل في Apps Script الحالي."
-      );
-
-      return false;
-    }, []);
-
-  /* ==========================================================
-     TRIGGER SYNC
-     ========================================================== */
-
-  const triggerSync =
-    useCallback(() => {
-      window.dispatchEvent(
-        new CustomEvent(
-          "elites_trigger_sync"
-        )
-      );
-    }, []);
-
-  /* ==========================================================
-     LOAD LAST SYNC
-     ========================================================== */
-
-  useEffect(() => {
-    const saved =
-      safeGetLocalStorage(
-        "elites_last_sync"
-      );
-
-    if (saved) {
-      setLastSync(saved);
-    }
-  }, []);
-
-  /* ==========================================================
-     PRODUCT CHANGE LISTENER
-     ========================================================== */
-
-  useEffect(() => {
-    if (!config.autoSync) {
-      return;
-    }
-
-    let timer:
-      | ReturnType<typeof setTimeout>
-      | null = null;
-
-    const handleProductChanged =
-      () => {
-        if (timer) {
-          clearTimeout(timer);
-        }
-
-        /*
-         * Debounce:
-         * إذا تغير أكثر من شيء بسرعة،
-         * نرسل مزامنة واحدة بدل عدة طلبات.
-         */
-        timer = setTimeout(() => {
-          syncNow();
-        }, 800);
-      };
-
-    window.addEventListener(
-      "elites_product_changed",
-      handleProductChanged
-    );
-
-    return () => {
-      if (timer) {
-        clearTimeout(timer);
+      if (
+        !config.autoSync ||
+        !V3_SYNC_ENABLED
+      ) {
+        return;
       }
 
-      window.removeEventListener(
+      let timer:
+        | ReturnType<
+            typeof setTimeout
+          >
+        | null = null;
+
+      const handleProductChanged =
+        () => {
+          if (
+            timer
+          ) {
+            clearTimeout(
+              timer
+            );
+          }
+
+          timer =
+            setTimeout(
+              () => {
+                void syncNow();
+              },
+              800
+            );
+        };
+
+      window.addEventListener(
         "elites_product_changed",
         handleProductChanged
       );
-    };
-  }, [
-    config.autoSync,
-    syncNow,
-  ]);
 
-  /* ==========================================================
-     EXTERNAL SYNC TRIGGER
-     ========================================================== */
+      return () => {
+        if (
+          timer
+        ) {
+          clearTimeout(
+            timer
+          );
+        }
 
-  useEffect(() => {
-    const handleTrigger =
-      () => {
-        syncNow();
+        window.removeEventListener(
+          "elites_product_changed",
+          handleProductChanged
+        );
       };
+    }, [
+      config.autoSync,
+      syncNow,
+    ]);
 
-    window.addEventListener(
-      "elites_trigger_sync",
-      handleTrigger
-    );
+    /* ========================================================
+       EXTERNAL SYNC TRIGGER
+       ======================================================== */
 
-    return () => {
-      window.removeEventListener(
+    useEffect(() => {
+      const handleTrigger =
+        () => {
+          if (
+            !config.autoSync ||
+            !V3_SYNC_ENABLED
+          ) {
+            console.info(
+              "Sync trigger ignored: V3 backend is not enabled yet."
+            );
+
+            return;
+          }
+
+          void syncNow();
+        };
+
+      window.addEventListener(
         "elites_trigger_sync",
         handleTrigger
       );
-    };
-  }, [syncNow]);
 
-  /* ==========================================================
-     CONTEXT VALUE
-     ========================================================== */
+      return () => {
+        window.removeEventListener(
+          "elites_trigger_sync",
+          handleTrigger
+        );
+      };
+    }, [
+      config.autoSync,
+      syncNow,
+    ]);
 
-  const value: GoogleSheetsContextType =
-    {
+    /* ========================================================
+       CONTEXT VALUE
+       ======================================================== */
+
+    const value:
+      GoogleSheetsContextType = {
       config,
 
       setConfig,
@@ -1213,14 +1902,14 @@ export const GoogleSheetsProvider: React.FC<{
       triggerSync,
     };
 
-  return (
-    <GoogleSheetsContext.Provider
-      value={value}
-    >
-      {children}
-    </GoogleSheetsContext.Provider>
-  );
-};
+    return (
+      <GoogleSheetsContext.Provider
+        value={value}
+      >
+        {children}
+      </GoogleSheetsContext.Provider>
+    );
+  };
 
 /* ============================================================
    HOOK
@@ -1232,7 +1921,9 @@ export function useGoogleSheets() {
       GoogleSheetsContext
     );
 
-  if (!context) {
+  if (
+    !context
+  ) {
     throw new Error(
       "useGoogleSheets must be used inside GoogleSheetsProvider"
     );

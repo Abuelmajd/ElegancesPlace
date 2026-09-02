@@ -241,19 +241,18 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
   const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   // Filtered Products
-  const filteredProducts = products.filter((p) => {
+  const filteredProducts = (products || []).filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          p.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (p.category_id && p.category_id.toLowerCase().includes(searchQuery.toLowerCase())) ||
                           (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
     
     let matchesCategory = selectedCategory === 'all';
     if (!matchesCategory) {
       const targetCat = selectedCategory.trim().toLowerCase();
-      const prodCat = (p.category || '').trim().toLowerCase();
+      const prodCat = (p.category_id || '').trim().toLowerCase();
       matchesCategory = prodCat === targetCat || 
                         prodCat.includes(targetCat) || 
-                        targetCat.includes(prodCat) ||
-                        (p.category_id && p.category_id.toLowerCase() === targetCat);
+                        targetCat.includes(prodCat);
     }
     return matchesSearch && matchesCategory;
   });
@@ -527,9 +526,9 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
                       <MapPin className="w-5 h-5 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
 
-                    {showCitySuggestions && filteredCities.length > 0 && (
+                    {showCitySuggestions && (filteredCities || []).length > 0 && (
                       <div className="absolute z-50 w-full bg-white border border-stone-200 shadow-xl rounded-xl mt-1 overflow-y-auto max-h-56 animate-in fade-in slide-in-from-top-1 duration-150">
-                        {filteredCities.map((city) => (
+                        {(filteredCities || []).map((city) => (
                           <button
                             key={city}
                             type="button"

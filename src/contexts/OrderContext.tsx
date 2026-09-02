@@ -1,1341 +1,1238 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useRef
-} from 'react';
-
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { 
+  Order, 
+  OrderItem, 
+  OrderStatus, 
+  FulfillmentStatus, 
+  ProductFulfillmentMethod,
+  SupplierFulfillment, 
+  SupplierSettlement,
+  SupplierCommStatus,
+  SupplierCollectionStatus,
+  SupplierSettlementStatus,
+  ReturnResponsibility,
+  OrderTimelineEvent, 
+  InventoryMovement, 
+  AuditLog, 
+  Customer, 
+  Supplier,
+  AccountingPaymentMethod,
+  PaymentStatus,
+  TimelineEventType
+} from '../types';
+import { useProducts } from './ProductContext';
+import { useGoogleSheets } from './GoogleSheetsContext';
+import { useAuth } from './AuthContext';
 import { useNotifications } from './NotificationContext';
 
-import {
-  extractGoogleDriveId,
-  generateDriveFileId
-} from '../utils/googleDriveUtils';
-
-import { ProductImage } from '../types';
-
-export interface StoreProduct {
-  id: string;
-  product_id?: string;
-  sku?: string;
-  name: string;
-  price: number;
-  oldPrice?: number;
-  originalPrice?: number;
-  costPrice?: number;
-  cost_price?: number;
-  category: string;
-  category_id?: string;
-  badge?: string;
-  image: string;
-  images?: ProductImage[];
-  drive_file_id?: string;
-  image_data?: string;
-  supplier: string;
-  supplier_id?: string;
-  stock: number;
-  fulfillment_method?: 'OWN_STOCK' | 'SUPPLIER_DROPSHIPPING';
-  description?: string;
-  rating?: number;
-  featured?: boolean;
-  bestSeller?: boolean;
-  newProduct?: boolean;
+export interface OrderContextType {
+  orders: Order[];
+  orderItems: OrderItem[];
+  supplierFulfillments: SupplierFulfillment[];
+  supplierSettlements: SupplierSettlement[];
+  timelineEvents: OrderTimelineEvent[];
+  inventoryMovements: InventoryMovement[];
+  auditLogs: AuditLog[];
+  customers: Customer[];
+  createOrder: (
+    orderInput: Partial<Order>, 
+    itemsInput: { product_id: string; quantity: number; discount?: number }[]
+  ) => Promise<{ success: boolean; order?: Order; error?: string; message?: string }>;
+  updateOrderStatus: (orderId: string, newStatus: OrderStatus, notes?: string) => Promise<boolean>;
+  updateFulfillmentStatus: (orderId: string, newStatus: FulfillmentStatus, notes?: string) => Promise<boolean>;
+  sendOrderToSupplier: (orderId: string, supplierNotes?: string, adminNotes?: string) => Promise<boolean>;
+  updateSupplierFulfillmentDetails: (fulfillmentId: string, updates: Partial<SupplierFulfillment>) => Promise<boolean>;
+  recordSupplierSettlement: (
+    fulfillmentId: string, 
+    amountPaid: number, 
+    paymentMethod?: AccountingPaymentMethod, 
+    reference?: string, 
+    notes?: string
+  ) => Promise<boolean>;
+  updateOrderTracking: (
+    orderId: string, 
+    shippingCompany: string, 
+    trackingNumber: string, 
+    trackingUrl?: string
+  ) => Promise<boolean>;
+  createInventoryMovement: (movement: Omit<InventoryMovement, 'movement_id' | 'date' | 'time'>) => Promise<boolean>;
+  addAuditLog: (log: Omit<AuditLog, 'log_id' | 'date' | 'time' | 'timestamp'>) => void;
+  syncOrdersWithSheets: () => Promise<boolean>;
+  runTestScenario1: () => Promise<{ success: boolean; log: string[]; orderId?: string }>;
+  runTestScenario2: () => Promise<{ success: boolean; log: string[]; orderId?: string }>;
+  getOrderById: (orderId: string) => Order | undefined;
+  getOrderItems: (orderId: string) => OrderItem[];
+  getOrderFulfillments: (orderId: string) => SupplierFulfillment[];
+  getOrderTimeline: (orderId: string) => OrderTimelineEvent[];
+  getOrderAuditLogs: (orderId: string) => AuditLog[];
 }
 
-interface ProductContextType {
-  products: StoreProduct[];
-  addProduct: (product: Omit<StoreProduct, 'id'>) => void;
-  updateProduct: (
-    id: string,
-    product: Partial<StoreProduct>
-  ) => void;
-  updateProducts: (
-    updates: {
-      id: string;
-      product: Partial<StoreProduct>;
-    }[]
-  ) => void;
-  updateProductStock: (
-    id: string,
-    newStock: number
-  ) => void;
-  deleteProduct: (id: string) => void;
-}
+const OrderContext = createContext<OrderContextType | undefined>(undefined);
 
-/* =========================================================
-   CONSTANTS
-   ========================================================= */
-
-const PRODUCTS_CACHE_KEY = 'elites_store_products';
-
-const LEGACY_PRODUCTS_CACHE_KEY = 'elites_products';
-
-const PRODUCT_IMAGES_CACHE_KEY =
-  'elites_product_images';
-
-const DRIVE_FOLDER_KEY =
-  'elites_drive_folder_id';
-
-const DEFAULT_DRIVE_FOLDER_ID =
-  '18P3PH04v9MOJ5D-f_MNkRKpI1K_i60-R';
-
-/* =========================================================
-   DEFAULT PRODUCTS
-   ========================================================= */
-
-const DEFAULT_PRODUCTS: StoreProduct[] = [
+// Initial Customer Data
+const INITIAL_CUSTOMERS: Customer[] = [
   {
-    id: 'p1',
-    product_id: 'p1',
-    sku: 'SKU-OUD-01',
-    name: 'عطر العود الملكي الفاخر',
-    price: 180,
-    oldPrice: 240,
-    costPrice: 120,
-    category: 'عطور',
-    category_id: 'cat_perfumes',
-    badge: 'الأكثر مبيعاً',
-    image:
-      'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=60',
-    supplier: 'مورد العطور المميزة',
-    supplier_id: 'sup_1',
-    stock: 15,
-    fulfillment_method: 'OWN_STOCK',
-    description:
-      'عطر شرقي أصيل بخلاصة العود الملكي الفاخر يدوم طويلاً.',
-    rating: 4.9
+    customer_id: 'cust_1',
+    name: 'سارة خالد المنصور',
+    phone: '+970599112233',
+    email: 'sara.k@gmail.com',
+    city: 'القدس',
+    address: 'حي الشيخ جراح، شارع صلاح الدين',
+    total_orders: 2,
+    total_spent: 455,
+    last_order_date: '2026-08-20',
+    created_at: '2026-01-15'
   },
   {
-    id: 'p2',
-    product_id: 'p2',
-    sku: 'SKU-WAT-02',
-    name: 'ساعة يد كلاسيكية أنيقة',
-    price: 320,
-    oldPrice: 400,
-    costPrice: 210,
-    category: 'ساعات',
-    category_id: 'cat_watches',
-    badge: 'جديد',
-    image:
-      'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&auto=format&fit=crop&q=60',
-    supplier: 'مورد الساعات العالمية',
-    supplier_id: 'sup_2',
-    stock: 8,
-    fulfillment_method: 'OWN_STOCK',
-    description:
-      'ساعة يد رجالية بتصميم كلاسيكي راقٍ ومقاومة للماء.',
-    rating: 4.8
+    customer_id: 'cust_2',
+    name: 'عبدالله فهد الشمري',
+    phone: '+970598445566',
+    email: 'a.shammari@hotmail.com',
+    city: 'رام الله والبيرة',
+    address: 'حي المصيون، شارع الإرسال',
+    total_orders: 1,
+    total_spent: 345,
+    last_order_date: '2026-08-22',
+    created_at: '2026-02-10'
   },
   {
-    id: 'p3',
-    product_id: 'p3',
-    sku: 'SKU-BAG-03',
-    name: 'حقيبة جلد طبيعي فاخرة',
-    price: 250,
-    oldPrice: 310,
-    costPrice: 160,
-    category: 'حقائب',
-    category_id: 'cat_handbags',
-    badge: 'خصم خاص',
-    image:
-      'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=600&auto=format&fit=crop&q=60',
-    supplier: 'مورد الجلديات الفاخرة',
-    supplier_id: 'sup_3',
-    stock: 12,
-    fulfillment_method:
-      'SUPPLIER_DROPSHIPPING',
-    description:
-      'حقيبة أعمال مصنوعة من أجود أنواع الجلد الطبيعي.',
-    rating: 4.7
-  },
-  {
-    id: 'p4',
-    product_id: 'p4',
-    sku: 'SKU-ACC-04',
-    name: 'نظارة شمسية بتصميم عصري',
-    price: 140,
-    oldPrice: 180,
-    costPrice: 85,
-    category: 'إكسسوارات',
-    category_id: 'cat_accessories',
-    badge: 'مميز',
-    image:
-      'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600&auto=format&fit=crop&q=60',
-    supplier: 'مورد الإكسسوارات',
-    supplier_id: 'sup_4',
-    stock: 20,
-    fulfillment_method:
-      'SUPPLIER_DROPSHIPPING',
-    description:
-      'نظارة شمسية عصرية توفر حماية كاملة من الأشعة فوق البنفسجية.',
-    rating: 4.9
+    customer_id: 'cust_3',
+    name: 'مها إبراهيم العتيبي',
+    phone: '+970568778899',
+    email: 'maha.otb@gmail.com',
+    city: 'نابلس',
+    address: 'حي رفيديا، قرب المستشفى التخصصي',
+    total_orders: 1,
+    total_spent: 275,
+    last_order_date: '2026-08-23',
+    created_at: '2026-03-05'
   }
 ];
 
-/* =========================================================
-   HELPERS
-   ========================================================= */
+// Initial Order Data
+const INITIAL_ORDERS: Order[] = [
+  {
+    order_id: 'ord_101',
+    order_number: 'ORD-1001',
+    customer_id: 'cust_1',
+    customer_name: 'سارة خالد المنصور',
+    customer_phone: '+970599112233',
+    customer_email: 'sara.k@gmail.com',
+    shipping_address: 'حي الشيخ جراح، شارع صلاح الدين',
+    city: 'القدس',
+    notes: 'يرجى الاتصال قبل التوصيل بنصف ساعة',
+    order_date: '2026-08-20',
+    order_time: '14:30:00',
+    created_at: '2026-08-20T14:30:00.000Z',
+    updated_at: '2026-08-23T18:00:00.000Z',
+    subtotal: 180,
+    discount: 0,
+    shipping_cost: 25,
+    total: 205,
+    payment_method: 'بطاقة مدى / ائتمان',
+    payment_status: 'paid',
+    order_status: 'DELIVERED',
+    fulfillment_status: 'DELIVERED',
+    sync_status: 'SYNCED',
+    shipping_company: 'شركة أرامكس Express',
+    tracking_number: 'TRK-98765432',
+    tracking_url: 'https://aramex.com/track/TRK-98765432'
+  },
+  {
+    order_id: 'ord_102',
+    order_number: 'ORD-1002',
+    customer_id: 'cust_2',
+    customer_name: 'عبدالله فهد الشمري',
+    customer_phone: '+970598445566',
+    customer_email: 'a.shammari@hotmail.com',
+    shipping_address: 'حي المصيون، شارع الإرسال',
+    city: 'رام الله والبيرة',
+    notes: 'الدفع عند الاستلام كاش',
+    order_date: '2026-08-22',
+    order_time: '18:15:00',
+    created_at: '2026-08-22T18:15:00.000Z',
+    updated_at: '2026-08-23T10:00:00.000Z',
+    subtotal: 320,
+    discount: 0,
+    shipping_cost: 25,
+    total: 345,
+    payment_method: 'الدفع عند الاستلام (COD)',
+    payment_status: 'pending',
+    order_status: 'SHIPPED',
+    fulfillment_status: 'SHIPPED',
+    sync_status: 'SYNCED',
+    shipping_company: 'شركة ترو ساعي للتوصيل',
+    tracking_number: 'TRK-11223344',
+    tracking_url: 'https://track.courier.com/TRK-11223344'
+  },
+  {
+    order_id: 'ord_103',
+    order_number: 'ORD-1003',
+    customer_id: 'cust_3',
+    customer_name: 'مها إبراهيم العتيبي',
+    customer_phone: '+970568778899',
+    customer_email: 'maha.otb@gmail.com',
+    shipping_address: 'حي رفيديا، قرب المستشفى التخصصي',
+    city: 'نابلس',
+    notes: 'تغليف هدية راقٍ لو تكرمتم',
+    order_date: '2026-08-23',
+    order_time: '11:00:00',
+    created_at: '2026-08-23T11:00:00.000Z',
+    updated_at: '2026-08-24T09:00:00.000Z',
+    subtotal: 250,
+    discount: 0,
+    shipping_cost: 25,
+    total: 275,
+    payment_method: 'الدفع عند الاستلام (COD)',
+    payment_status: 'pending',
+    order_status: 'PROCESSING',
+    fulfillment_status: 'AWAITING_SUPPLIER',
+    sync_status: 'SYNCED'
+  }
+];
 
-/**
- * Safely read JSON from localStorage.
- *
- * Any localStorage error must never crash the application.
- */
-function safeGetJSON<T>(
-  key: string,
-  fallback: T
-): T {
-  try {
-    const raw = localStorage.getItem(key);
+// Initial Order Items
+const INITIAL_ORDER_ITEMS: OrderItem[] = [
+  {
+    order_item_id: 'item_101_1',
+    order_id: 'ord_101',
+    product_id: 'p1',
+    sku_at_purchase: 'SKU-OUD-01',
+    sku: 'SKU-OUD-01',
+    product_name_at_purchase: 'عطر العود الملكي الفاخر',
+    product_name: 'عطر العود الملكي الفاخر',
+    supplier_id_at_purchase: 'sup_1',
+    supplier_name_at_purchase: 'مورد العطور المميزة',
+    cost_price_at_purchase: 120,
+    selling_price_at_purchase: 180,
+    quantity: 1,
+    subtotal: 180,
+    profit: 60,
+    fulfillment_method_at_purchase: 'OWN_STOCK'
+  },
+  {
+    order_item_id: 'item_102_1',
+    order_id: 'ord_102',
+    product_id: 'p2',
+    sku_at_purchase: 'SKU-WAT-02',
+    sku: 'SKU-WAT-02',
+    product_name_at_purchase: 'ساعة يد كلاسيكية أنيقة',
+    product_name: 'ساعة يد كلاسيكية أنيقة',
+    supplier_id_at_purchase: 'sup_2',
+    supplier_name_at_purchase: 'مورد الساعات العالمية',
+    cost_price_at_purchase: 210,
+    selling_price_at_purchase: 320,
+    quantity: 1,
+    subtotal: 320,
+    profit: 110,
+    fulfillment_method_at_purchase: 'OWN_STOCK'
+  },
+  {
+    order_item_id: 'item_103_1',
+    order_id: 'ord_103',
+    product_id: 'p3',
+    sku_at_purchase: 'SKU-BAG-03',
+    sku: 'SKU-BAG-03',
+    product_name_at_purchase: 'حقيبة جلد طبيعي فاخرة',
+    product_name: 'حقيبة جلد طبيعي فاخرة',
+    supplier_id_at_purchase: 'sup_3',
+    supplier_name_at_purchase: 'مورد الجلديات الفاخرة',
+    cost_price_at_purchase: 160,
+    selling_price_at_purchase: 250,
+    quantity: 1,
+    subtotal: 250,
+    profit: 90,
+    fulfillment_method_at_purchase: 'SUPPLIER_DROPSHIPPING'
+  }
+];
 
-    if (!raw) {
-      return fallback;
+// Initial Supplier Fulfillments
+const INITIAL_FULFILLMENTS: SupplierFulfillment[] = [
+  {
+    fulfillment_id: 'ful_103_1',
+    order_id: 'ord_103',
+    supplier_id: 'sup_3',
+    supplier_name_snapshot: 'مورد الجلديات الفاخرة',
+    supplier_contact_snapshot: 'زياد الخالدي',
+    supplier_phone_snapshot: '+970568778899',
+    supplier_platform: 'whatsapp',
+    status: 'AWAITING_SUPPLIER',
+    supplier_cost: 160,
+    shipping_cost: 0,
+    supplier_notes: 'حقيبة جلد طبيعي فاخرة أسود - تغليف هدية',
+    admin_notes: 'تم تحويل الطلب بانتظار تأكيد الاستلام وتجهيز الشحن',
+    created_at: '2026-08-23T11:05:00.000Z',
+    updated_at: '2026-08-23T11:05:00.000Z',
+    updated_by: 'المدير العام'
+  }
+];
+
+// Initial Timeline Events
+const INITIAL_TIMELINE_EVENTS: OrderTimelineEvent[] = [
+  {
+    event_id: 'evt_1',
+    order_id: 'ord_101',
+    event_type: 'ORDER_CREATED',
+    timestamp: '2026-08-20 14:30:00',
+    user_id: 'cust_1',
+    description: 'تم إنشاء الطلب رقم ORD-1001 بنجاح عبر المتجر الإلكتروني'
+  },
+  {
+    event_id: 'evt_2',
+    order_id: 'ord_101',
+    event_type: 'ORDER_CONFIRMED',
+    timestamp: '2026-08-20 14:35:00',
+    user_id: 'system',
+    description: 'تم تأكيد الدفع الإلكتروني واعتماد الطلب'
+  },
+  {
+    event_id: 'evt_3',
+    order_id: 'ord_101',
+    event_type: 'SHIPPED',
+    timestamp: '2026-08-21 09:00:00',
+    user_id: 'admin_1',
+    description: 'تم تسليم الشحنة لشركة أرامكس مع بوليصة TRK-98765432'
+  },
+  {
+    event_id: 'evt_4',
+    order_id: 'ord_101',
+    event_type: 'DELIVERED',
+    timestamp: '2026-08-23 18:00:00',
+    user_id: 'admin_1',
+    description: 'تم تسليم الطلب للعميل بنجاح'
+  },
+  {
+    event_id: 'evt_5',
+    order_id: 'ord_102',
+    event_type: 'ORDER_CREATED',
+    timestamp: '2026-08-22 18:15:00',
+    user_id: 'cust_2',
+    description: 'تم إنشاء الطلب رقم ORD-1002 بنجاح'
+  },
+  {
+    event_id: 'evt_6',
+    order_id: 'ord_102',
+    event_type: 'SHIPPED',
+    timestamp: '2026-08-23 10:00:00',
+    user_id: 'admin_1',
+    description: 'تم شحن الطلب مع ترو ساعي برقم تتبع TRK-11223344'
+  },
+  {
+    event_id: 'evt_7',
+    order_id: 'ord_103',
+    event_type: 'ORDER_CREATED',
+    timestamp: '2026-08-23 11:00:00',
+    user_id: 'cust_3',
+    description: 'تم إنشاء طلب جديد برقم ORD-1003 (دروب شيبينغ)'
+  },
+  {
+    event_id: 'evt_8',
+    order_id: 'ord_103',
+    event_type: 'SUPPLIER_CONTACTED',
+    timestamp: '2026-08-23 11:05:00',
+    user_id: 'admin_1',
+    description: 'تم إرسال بيانات التوريد لمورد الجلديات الفاخرة عبر واتساب'
+  }
+];
+
+// Initial Inventory Movements
+const INITIAL_INVENTORY_MOVEMENTS: InventoryMovement[] = [
+  {
+    movement_id: 'mov_101',
+    product_id: 'p1',
+    order_id: 'ord_101',
+    quantity: 1,
+    before_quantity: 16,
+    after_quantity: 15,
+    movement_type: 'SALE',
+    user_id: 'system',
+    date: '2026-08-20',
+    time: '14:30:00',
+    timestamp: '2026-08-20 14:30:00',
+    notes: 'بيع من المخزون الخاص بالطلب ord_101'
+  },
+  {
+    movement_id: 'mov_102',
+    product_id: 'p2',
+    order_id: 'ord_102',
+    quantity: 1,
+    before_quantity: 9,
+    after_quantity: 8,
+    movement_type: 'SALE',
+    user_id: 'system',
+    date: '2026-08-22',
+    time: '18:15:00',
+    timestamp: '2026-08-22 18:15:00',
+    notes: 'بيع من المخزون الخاص بالطلب ord_102'
+  }
+];
+
+// Initial Audit Logs
+const INITIAL_AUDIT_LOGS: AuditLog[] = [
+  {
+    log_id: 'audit_1',
+    user_id: 'system',
+    user_name: 'النظام الآلي',
+    action: 'CREATE_ORDER',
+    entity: 'Order',
+    entity_id: 'ord_101',
+    date: '2026-08-20',
+    time: '14:30:00',
+    details: 'إنشاء الطلب رقم ORD-1001 للعميل سارة خالد بقيمة 205 ₪'
+  },
+  {
+    log_id: 'audit_2',
+    user_id: 'admin_1',
+    user_name: 'أحمد محمد (مدير)',
+    action: 'SEND_TO_SUPPLIER',
+    entity: 'SupplierFulfillment',
+    entity_id: 'ful_103_1',
+    date: '2026-08-23',
+    time: '11:05:00',
+    details: 'تحويل الطلب ord_103 إلى مورد الجلديات الفاخرة'
+  }
+];
+
+export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { products, updateProductStock } = useProducts();
+  const { syncNow } = useGoogleSheets();
+  const { currentUser } = useAuth();
+  const { notifyNewOrder, notifyOrderStatusChange } = useNotifications();
+
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const cached = localStorage.getItem('elites_orders');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // ignore
+      }
     }
-
-    const parsed = JSON.parse(raw);
-
-    return parsed as T;
-  } catch (error) {
-    console.warn(
-      `تعذر قراءة localStorage key: ${key}`,
-      error
-    );
-
-    return fallback;
-  }
-}
-
-/**
- * Safely remove a localStorage item.
- */
-function safeRemoveItem(key: string): void {
-  try {
-    localStorage.removeItem(key);
-  } catch (error) {
-    console.warn(
-      `تعذر حذف localStorage key: ${key}`,
-      error
-    );
-  }
-}
-
-/**
- * Convert ProductImage objects to lightweight cache objects.
- *
- * We deliberately remove possible Base64/binary fields.
- */
-function sanitizeProductImagesForCache(
-  images: ProductImage[] | undefined
-): any[] | undefined {
-  if (!Array.isArray(images)) {
-    return undefined;
-  }
-
-  return images.map((image: any) => {
-    if (!image || typeof image !== 'object') {
-      return image;
-    }
-
-    const {
-      image_data,
-      base64,
-      data,
-      blob,
-      ...lightweightImage
-    } = image;
-
-    return lightweightImage;
+    return INITIAL_ORDERS;
   });
-}
 
-/**
- * Create a lightweight product for localStorage.
- *
- * IMPORTANT:
- * The full product remains in React state.
- *
- * LocalStorage receives only the information needed
- * for offline cache/synchronization.
- *
- * Large Base64 image data is intentionally removed.
- */
-function sanitizeProductForCache(
-  product: StoreProduct
-): Partial<StoreProduct> & {
-  id: string;
-} {
-  const {
-    image_data,
-    images,
-    ...rest
-  } = product;
-
-  const lightweight: any = {
-    ...rest
-  };
-
-  /**
-   * Keep image metadata but never store Base64.
-   */
-  if (images) {
-    lightweight.images =
-      sanitizeProductImagesForCache(images);
-  }
-
-  /**
-   * If the main image itself is a Base64 data URL,
-   * do NOT put it into localStorage.
-   *
-   * This prevents a single product from consuming
-   * megabytes of browser storage.
-   */
-  if (
-    typeof lightweight.image === 'string' &&
-    lightweight.image.startsWith('data:')
-  ) {
-    /**
-     * We keep an empty image in the cache.
-     *
-     * The actual React state still contains the original
-     * image until the Drive upload process replaces it.
-     */
-    lightweight.image = '';
-  }
-
-  return lightweight;
-}
-
-/**
- * Convert the complete product array into a lightweight
- * LocalStorage cache.
- */
-function sanitizeProductsForCache(
-  products: StoreProduct[]
-): any[] {
-  return products.map(
-    sanitizeProductForCache
-  );
-}
-
-/**
- * Safely save products cache.
- *
- * This function MUST NEVER throw.
- *
- * If the browser quota is exceeded, the application
- * continues working normally.
- */
-function saveProductsCache(
-  products: StoreProduct[]
-): void {
-  const lightweightProducts =
-    sanitizeProductsForCache(products);
-
-  const serialized =
-    JSON.stringify(lightweightProducts);
-
-  try {
-    localStorage.setItem(
-      PRODUCTS_CACHE_KEY,
-      serialized
-    );
-
-    /**
-     * Successful save.
-     */
-    return;
-  } catch (error) {
-    console.warn(
-      'تعذر حفظ المنتجات في LocalStorage. سيتم تنظيف الكاش القديم والمحاولة مرة أخرى.',
-      error
-    );
-  }
-
-  /**
-   * If quota was exceeded, remove known heavy/legacy
-   * caches and retry once.
-   */
-  try {
-    safeRemoveItem(
-      LEGACY_PRODUCTS_CACHE_KEY
-    );
-
-    safeRemoveItem(
-      'elites_recent_drive_images'
-    );
-
-    /**
-     * Remove old session image previews.
-     */
-    try {
-      const keysToRemove: string[] = [];
-
-      for (
-        let i = 0;
-        i < sessionStorage.length;
-        i++
-      ) {
-        const key =
-          sessionStorage.key(i);
-
-        if (
-          key &&
-          (
-            key.startsWith(
-              'drive_preview_'
-            ) ||
-            key.startsWith(
-              'drive_preview_id_'
-            )
-          )
-        ) {
-          keysToRemove.push(key);
-        }
+  const [orderItems, setOrderItems] = useState<OrderItem[]>(() => {
+    const cached = localStorage.getItem('elites_order_items');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // ignore
       }
+    }
+    return INITIAL_ORDER_ITEMS;
+  });
 
-      keysToRemove.forEach(
-        key => {
-          try {
-            sessionStorage.removeItem(
-              key
-            );
-          } catch {
-            // Ignore.
-          }
-        }
-      );
-    } catch {
-      // Ignore sessionStorage errors.
+  const [supplierFulfillments, setSupplierFulfillments] = useState<SupplierFulfillment[]>(() => {
+    const cached = localStorage.getItem('elites_fulfillments') || localStorage.getItem('elites_supplier_fulfillments');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // ignore
+      }
+    }
+    return INITIAL_FULFILLMENTS;
+  });
+
+  const [supplierSettlements, setSupplierSettlements] = useState<SupplierSettlement[]>(() => {
+    const cached = localStorage.getItem('elites_supplier_settlements');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // ignore
+      }
+    }
+    return [];
+  });
+
+  const [timelineEvents, setTimelineEvents] = useState<OrderTimelineEvent[]>(() => {
+    const cached = localStorage.getItem('elites_order_timeline');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // ignore
+      }
+    }
+    return INITIAL_TIMELINE_EVENTS;
+  });
+
+  const [inventoryMovements, setInventoryMovements] = useState<InventoryMovement[]>(() => {
+    const cached = localStorage.getItem('elites_inventory_movements');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // ignore
+      }
+    }
+    return INITIAL_INVENTORY_MOVEMENTS;
+  });
+
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
+    const cached = localStorage.getItem('elites_audit_logs');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // ignore
+      }
+    }
+    return INITIAL_AUDIT_LOGS;
+  });
+
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    const cached = localStorage.getItem('elites_customers');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // ignore
+      }
+    }
+    return INITIAL_CUSTOMERS;
+  });
+
+  // Sync to localStorage
+  useEffect(() => {
+    localStorage.setItem('elites_orders', JSON.stringify(orders));
+  }, [orders]);
+
+  useEffect(() => {
+    localStorage.setItem('elites_order_items', JSON.stringify(orderItems));
+  }, [orderItems]);
+
+  useEffect(() => {
+    localStorage.setItem('elites_fulfillments', JSON.stringify(supplierFulfillments));
+    localStorage.setItem('elites_supplier_fulfillments', JSON.stringify(supplierFulfillments));
+  }, [supplierFulfillments]);
+
+  useEffect(() => {
+    localStorage.setItem('elites_supplier_settlements', JSON.stringify(supplierSettlements));
+  }, [supplierSettlements]);
+
+  useEffect(() => {
+    localStorage.setItem('elites_order_timeline', JSON.stringify(timelineEvents));
+  }, [timelineEvents]);
+
+  useEffect(() => {
+    localStorage.setItem('elites_inventory_movements', JSON.stringify(inventoryMovements));
+  }, [inventoryMovements]);
+
+  useEffect(() => {
+    localStorage.setItem('elites_audit_logs', JSON.stringify(auditLogs));
+  }, [auditLogs]);
+
+  useEffect(() => {
+    localStorage.setItem('elites_customers', JSON.stringify(customers));
+  }, [customers]);
+
+  const addAuditLog = useCallback((log: Omit<AuditLog, 'log_id' | 'date' | 'time' | 'timestamp'>) => {
+    const d = new Date();
+    const dateStr = d.toISOString().split('T')[0];
+    const timeStr = d.toTimeString().split(' ')[0];
+    const newLog: AuditLog = {
+      ...log,
+      log_id: 'audit_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      user_id: log.user_id || currentUser?.user_id || 'system',
+      user_name: log.user_name || currentUser?.name || 'النظام الآلي',
+      date: dateStr,
+      time: timeStr
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+  }, [currentUser]);
+
+  const createOrder = useCallback(async (
+    orderInput: Partial<Order>, 
+    itemsInput: { product_id: string; quantity: number; discount?: number }[]
+  ) => {
+    if (!itemsInput || itemsInput.length === 0) {
+      return { success: false, error: 'NO_ITEMS', message: 'السلة فارغة. يرجى إضافة منتجات لإنشاء الطلب.' };
     }
 
-    localStorage.setItem(
-      PRODUCTS_CACHE_KEY,
-      serialized
-    );
-  } catch (retryError) {
-    /**
-     * The cache is optional.
-     *
-     * Even if this fails, the application MUST continue.
-     */
-    console.warn(
-      'تعذر حفظ كاش المنتجات حتى بعد تنظيف التخزين المحلي. سيتم الاعتماد على الحالة الحالية وGoogle Sheets.',
-      retryError
-    );
-  }
-}
-
-/**
- * Safely save product image metadata.
- *
- * These records contain URLs and IDs only.
- * No Base64 data is stored.
- */
-function saveProductImageRecord(
-  productId: string,
-  driveId: string,
-  imageUrl: string
-): void {
-  try {
-    const raw =
-      localStorage.getItem(
-        PRODUCT_IMAGES_CACHE_KEY
-      );
-
-    let records: any[] = [];
-
-    try {
-      const parsed = raw
-        ? JSON.parse(raw)
-        : [];
-
-      if (Array.isArray(parsed)) {
-        records = parsed;
+    const suppliers = JSON.parse(localStorage.getItem('elites_suppliers') || '[]');
+    
+    // Check stock first
+    for (const item of itemsInput) {
+      const prod = products.find(p => p.id === item.product_id || p.product_id === item.product_id);
+      if (!prod) {
+        return { success: false, error: 'PRODUCT_NOT_FOUND', message: `المنتج (${item.product_id}) غير متوفر في المتجر.` };
       }
-    } catch {
-      records = [];
+      if ((prod.fulfillment_method || 'OWN_STOCK') === 'OWN_STOCK') {
+        const availableStock = prod.stock !== undefined ? Number(prod.stock) : 0;
+        if (availableStock < item.quantity) {
+          return {
+            success: false,
+            error: 'INSUFFICIENT_STOCK',
+            message: `INSUFFICIENT STOCK: الكمية المتوفرة في المخزون للمنتج "${prod.name}" هي (${availableStock}) فقط، بينما المطلوب (${item.quantity}). لا يمكن إتمام الطلب.`
+          };
+        }
+      }
     }
 
-    const folderId =
-      localStorage.getItem(
-        DRIVE_FOLDER_KEY
-      ) ||
-      DEFAULT_DRIVE_FOLDER_ID;
+    const d = new Date();
+    const dateStr = d.toISOString().split('T')[0];
+    const timeStr = d.toTimeString().split(' ')[0];
+    const isoStr = d.toISOString();
+    const orderId = orderInput.order_id || 'ord_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const orderNum = 'ORD-' + (1000 + orders.length + 1);
 
-    const record = {
-      image_id:
-        'img_' + productId,
+    let subtotal = 0;
+    const items: OrderItem[] = [];
+    const fulfillments: SupplierFulfillment[] = [];
+    const movements: InventoryMovement[] = [];
+    let isDropshipping = false;
 
-      product_id:
-        productId,
+    for (const item of itemsInput) {
+      const prod = products.find(p => p.id === item.product_id || p.product_id === item.product_id)!;
+      const fMethod = prod.fulfillment_method || 'OWN_STOCK';
+      const sPrice = Number(prod.price) || 0;
+      const cPrice = prod.costPrice !== undefined ? Number(prod.costPrice) : Math.round(sPrice * 0.7);
+      const discount = item.discount || 0;
+      const itemSubtotal = (sPrice * item.quantity) - discount;
+      const profit = itemSubtotal - (cPrice * item.quantity);
 
-      drive_file_id:
-        driveId || '',
+      subtotal += itemSubtotal;
 
-      image_url:
-        imageUrl || '',
+      const supplierInfo = suppliers.find((s: any) => s.supplier_id === prod.supplier_id) || {
+        supplier_id: prod.supplier_id || 'sup_1',
+        name: prod.supplier || 'مورد عام',
+        company_name: prod.supplier || 'شركة التوريد',
+        phone: '+970590000000',
+        whatsapp: '+970590000000',
+        preferred_platform: 'whatsapp'
+      };
 
-      folder_path:
-        `Google Drive / Product Images Folder (${folderId})`,
+      const orderItem: OrderItem = {
+        order_item_id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        order_id: orderId,
+        product_id: prod.product_id || prod.id,
+        sku_at_purchase: prod.sku || 'SKU-' + (prod.product_id || prod.id),
+        sku: prod.sku || 'SKU-' + (prod.product_id || prod.id),
+        product_name_at_purchase: prod.name,
+        product_name: prod.name,
+        supplier_id_at_purchase: prod.supplier_id || supplierInfo.supplier_id || 'sup_1',
+        supplier_name_at_purchase: supplierInfo.company_name || prod.supplier || 'المورد',
+        cost_price_at_purchase: cPrice,
+        selling_price_at_purchase: sPrice,
+        quantity: item.quantity,
+        discount_at_purchase: discount,
+        subtotal: itemSubtotal,
+        profit: profit,
+        fulfillment_method_at_purchase: fMethod as ProductFulfillmentMethod
+      };
 
-      is_primary: true,
+      items.push(orderItem);
 
-      sort_order: 1
+      if (fMethod === 'OWN_STOCK') {
+        const currentStock = Number(prod.stock) || 0;
+        const newStock = Math.max(0, currentStock - item.quantity);
+        updateProductStock(prod.id, newStock);
+
+        const movement: InventoryMovement = {
+          movement_id: 'mov_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          product_id: prod.product_id || prod.id,
+          order_id: orderId,
+          quantity: item.quantity,
+          before_quantity: currentStock,
+          after_quantity: newStock,
+          movement_type: 'SALE',
+          user_id: currentUser?.user_id || 'system',
+          date: dateStr,
+          time: timeStr,
+          timestamp: `${dateStr} ${timeStr}`,
+          notes: `خصم بيع مخزون محلي للطلب ${orderNum}`
+        };
+        movements.push(movement);
+      } else {
+        isDropshipping = true;
+        const fulfillment: SupplierFulfillment = {
+          fulfillment_id: 'ful_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          order_id: orderId,
+          supplier_id: supplierInfo.supplier_id,
+          supplier_name_snapshot: supplierInfo.company_name || supplierInfo.name,
+          supplier_contact_snapshot: supplierInfo.name,
+          supplier_phone_snapshot: supplierInfo.phone || supplierInfo.whatsapp,
+          supplier_platform: supplierInfo.preferred_platform || 'whatsapp',
+          status: 'AWAITING_SUPPLIER',
+          supplier_cost: cPrice * item.quantity,
+          shipping_cost: 0,
+          supplier_notes: `مطلوب توريد: ${prod.name} (SKU: ${prod.sku || prod.id}) عدد ${item.quantity}`,
+          admin_notes: 'بانتظار تحويل الطلب وتأكيد المورد',
+          created_at: isoStr,
+          updated_at: isoStr,
+          updated_by: currentUser?.name || 'النظام'
+        };
+        fulfillments.push(fulfillment);
+      }
+    }
+
+    const shippingCost = orderInput.shipping_cost !== undefined ? Number(orderInput.shipping_cost) : 25;
+    const discountAmount = orderInput.discount !== undefined ? Number(orderInput.discount) : 0;
+    const totalAmount = subtotal - discountAmount + shippingCost;
+    
+    const phoneNum = (orderInput.customer_phone || orderInput.phone || '').trim();
+    const custName = (orderInput.customer_name || 'عميل المتجر').trim();
+    const custEmail = (orderInput.customer_email || '').trim();
+    const city = orderInput.city || 'القدس';
+    const address = orderInput.shipping_address || orderInput.address || '';
+
+    let customerId = orderInput.customer_id;
+    const existingCust = customers.find(c => 
+      (customerId && c.customer_id === customerId) || 
+      (phoneNum && c.phone === phoneNum) || 
+      (custEmail && c.email === custEmail)
+    );
+
+    if (existingCust) {
+      customerId = existingCust.customer_id;
+      setCustomers(prev => prev.map(c => 
+        c.customer_id === customerId 
+          ? {
+              ...c,
+              total_orders: (c.total_orders || 0) + 1,
+              total_spent: (c.total_spent || 0) + totalAmount,
+              last_order_date: dateStr,
+              address: address || c.address,
+              city: city || c.city
+            }
+          : c
+      ));
+    } else {
+      customerId = customerId || 'cust_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      const newCust: Customer = {
+        customer_id: customerId,
+        name: custName,
+        phone: phoneNum || '+970590000000',
+        email: custEmail || `customer_${Date.now()}@elites-store.com`,
+        city: city,
+        address: address,
+        notes: orderInput.notes || '',
+        total_orders: 1,
+        total_spent: totalAmount,
+        last_order_date: dateStr,
+        created_at: dateStr
+      };
+      setCustomers(prev => [newCust, ...prev]);
+    }
+
+    const fStatus = isDropshipping ? 'AWAITING_SUPPLIER' : 'PENDING';
+    const oStatus = orderInput.order_status || 'NEW';
+
+    const newOrder: Order = {
+      order_id: orderId,
+      order_number: orderInput.order_number || orderNum,
+      customer_id: customerId,
+      customer_name: custName,
+      customer_phone: phoneNum,
+      customer_email: custEmail,
+      shipping_address: address,
+      city: city,
+      notes: orderInput.notes || '',
+      order_date: dateStr,
+      order_time: timeStr,
+      created_at: isoStr,
+      updated_at: isoStr,
+      subtotal: subtotal,
+      discount: discountAmount,
+      shipping_cost: shippingCost,
+      total: totalAmount,
+      payment_method: orderInput.payment_method || 'الدفع عند الاستلام (COD)',
+      payment_status: (orderInput.payment_status as PaymentStatus) || 'pending',
+      order_status: oStatus as OrderStatus,
+      fulfillment_status: fStatus as FulfillmentStatus,
+      sync_status: 'PENDING',
+      shipping_company: orderInput.shipping_company || '',
+      tracking_number: orderInput.tracking_number || '',
+      tracking_url: orderInput.tracking_url || '',
+      items: items,
+      phone: phoneNum,
+      address: address
     };
 
-    const updatedRecords = [
-      record,
-      ...records.filter(
-        (image: any) =>
-          image?.product_id !==
-          productId
-      )
-    ];
+    const tEvent: OrderTimelineEvent = {
+      event_id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      order_id: orderId,
+      event_type: 'ORDER_CREATED',
+      timestamp: `${dateStr} ${timeStr}`,
+      user_id: currentUser?.user_id || customerId,
+      description: `تم إنشاء الطلب رقم ${newOrder.order_number} بنجاح بقيمة إجمالية ${totalAmount} ₪`
+    };
 
-    try {
-      localStorage.setItem(
-        PRODUCT_IMAGES_CACHE_KEY,
-        JSON.stringify(
-          updatedRecords
-        )
-      );
-    } catch (storageError) {
-      /**
-       * Product image metadata is optional cache.
-       * Never let it crash the product operation.
-       */
-      console.warn(
-        'تعذر حفظ بيانات صورة المنتج في LocalStorage:',
-        storageError
-      );
-
-      /**
-       * Try once after removing the old cache.
-       */
-      try {
-        safeRemoveItem(
-          PRODUCT_IMAGES_CACHE_KEY
-        );
-
-        localStorage.setItem(
-          PRODUCT_IMAGES_CACHE_KEY,
-          JSON.stringify([
-            record
-          ])
-        );
-      } catch {
-        // Ignore.
-      }
+    setOrders(prev => [newOrder, ...prev]);
+    setOrderItems(prev => [...items, ...prev]);
+    if (fulfillments.length > 0) {
+      setSupplierFulfillments(prev => [...fulfillments, ...prev]);
     }
-  } catch (error) {
-    console.warn(
-      'خطأ في تحديث بيانات صورة المنتج:',
-      error
-    );
-  }
-}
-
-/**
- * Generate a product ID.
- */
-function generateProductId(): string {
-  return (
-    'prod_' +
-    Date.now() +
-    '_' +
-    Math.random()
-      .toString(36)
-      .substring(2, 7)
-  );
-}
-
-/**
- * Dispatch the application-level product event safely.
- */
-function dispatchProductChanged(): void {
-  try {
-    window.dispatchEvent(
-      new Event(
-        'elites_product_changed'
-      )
-    );
-  } catch (error) {
-    console.warn(
-      'تعذر إرسال حدث تحديث المنتج:',
-      error
-    );
-  }
-}
-
-/* =========================================================
-   CONTEXT
-   ========================================================= */
-
-const ProductContext =
-  createContext<
-    ProductContextType | undefined
-  >(undefined);
-
-/* =========================================================
-   PROVIDER
-   ========================================================= */
-
-export const ProductProvider: React.FC<{
-  children: React.ReactNode;
-}> = ({ children }) => {
-  const {
-    notifyLowStock
-  } = useNotifications();
-
-  /**
-   * Load the lightweight product cache.
-   *
-   * We prefer the new key.
-   * The old key is used ONLY for one-time migration.
-   */
-  const [
-    products,
-    setProducts
-  ] = useState<StoreProduct[]>(() => {
-    try {
-      /**
-       * 1. New cache key.
-       */
-      const currentCache =
-        safeGetJSON<any[]>(
-          PRODUCTS_CACHE_KEY,
-          []
-        );
-
-      if (
-        Array.isArray(
-          currentCache
-        ) &&
-        currentCache.length > 0
-      ) {
-        return currentCache as StoreProduct[];
-      }
-
-      /**
-       * 2. Legacy cache migration.
-       */
-      const legacyCache =
-        safeGetJSON<any[]>(
-          LEGACY_PRODUCTS_CACHE_KEY,
-          []
-        );
-
-      if (
-        Array.isArray(
-          legacyCache
-        ) &&
-        legacyCache.length > 0
-      ) {
-        /**
-         * Do NOT duplicate the legacy data.
-         *
-         * Save it only under the new key.
-         */
-        const migrated =
-          legacyCache as StoreProduct[];
-
-        saveProductsCache(
-          migrated
-        );
-
-        return migrated;
-      }
-    } catch (error) {
-      console.warn(
-        'تعذر تحميل منتجات المتجر من LocalStorage:',
-        error
-      );
+    if (movements.length > 0) {
+      setInventoryMovements(prev => [...movements, ...prev]);
     }
+    setTimelineEvents(prev => [tEvent, ...prev]);
 
-    /**
-     * 3. Final fallback.
-     */
-    return DEFAULT_PRODUCTS;
-  });
+    addAuditLog({
+      action: 'CREATE_ORDER',
+      entity: 'Order',
+      entity_id: orderId,
+      details: `إنشاء الطلب ${newOrder.order_number} بمجموع ${totalAmount} ₪ لـ ${custName}`
+    });
 
-  /**
-   * Keep a synchronous reference to the latest
-   * products array.
-   *
-   * This allows us to:
-   *
-   * 1. Calculate the next state
-   * 2. Save it to LocalStorage
-   * 3. Update React state
-   * 4. Dispatch synchronization event
-   *
-   * without putting side effects inside setState().
-   */
-  const productsRef =
-    useRef<StoreProduct[]>(
-      products
-    );
+    notifyNewOrder(newOrder).catch(console.error);
 
-  /**
-   * Keep ref synchronized with React state.
-   */
-  useEffect(() => {
-    productsRef.current =
-      products;
-  }, [products]);
+    setTimeout(() => {
+      syncNow().then(synced => {
+        setOrders(prev => prev.map(o => o.order_id === orderId ? { ...o, sync_status: synced ? 'SYNCED' : 'FAILED' } : o));
+      }).catch(() => {
+        setOrders(prev => prev.map(o => o.order_id === orderId ? { ...o, sync_status: 'FAILED' } : o));
+      });
+    }, 400);
 
-  /**
-   * IMPORTANT:
-   *
-   * We do NOT continuously write the products array
-   * to LocalStorage from this effect.
-   *
-   * Product mutations explicitly update the cache.
-   *
-   * This prevents:
-   *
-   * - duplicate writes
-   * - unnecessary writes
-   * - large repeated JSON serialization
-   * - QuotaExceededError loops
-   */
-  useEffect(() => {
-    /**
-     * One-time cleanup of the legacy key.
-     *
-     * It is safe because the new cache has already been
-     * loaded or initialized.
-     */
-    try {
-      if (
-        localStorage.getItem(
-          PRODUCTS_CACHE_KEY
-        )
-      ) {
-        safeRemoveItem(
-          LEGACY_PRODUCTS_CACHE_KEY
-        );
-      }
-    } catch {
-      // Ignore.
-    }
-  }, []);
+    return { success: true, order: newOrder, message: `تم إنشاء الطلب بنجاح برقم (${newOrder.order_number})!` };
+  }, [products, orders, customers, currentUser, updateProductStock, addAuditLog, notifyNewOrder, syncNow]);
 
-  /* =======================================================
-     ADD PRODUCT
-     ======================================================= */
+  const updateOrderStatus = useCallback(async (orderId: string, newStatus: OrderStatus, notes = '') => {
+    const order = orders.find(o => o.order_id === orderId);
+    if (!order) return false;
 
-  const addProduct = (
-    productData: Omit<
-      StoreProduct,
-      'id'
-    >
+    const oldStatus = order.order_status;
+    const d = new Date();
+    const tsStr = d.toISOString().replace('T', ' ').substring(0, 19);
+
+    let eventType: TimelineEventType = 'PROCESSING_STARTED';
+    if (newStatus === 'CONFIRMED' || newStatus === 'ORDER_CONFIRMED') eventType = 'ORDER_CONFIRMED';
+    else if (newStatus === 'SHIPPED') eventType = 'SHIPPED';
+    else if (newStatus === 'DELIVERED') eventType = 'DELIVERED';
+    else if (newStatus === 'CANCELLED') eventType = 'CANCELLED';
+    else if (newStatus === 'RETURNED') eventType = 'RETURNED';
+    else if (newStatus === 'REFUNDED') eventType = 'REFUNDED';
+
+    const tEvent: OrderTimelineEvent = {
+      event_id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      order_id: orderId,
+      event_type: eventType,
+      timestamp: tsStr,
+      user_id: currentUser?.user_id || 'admin',
+      description: `تغيير حالة الطلب من [${oldStatus}] إلى [${newStatus}]${notes ? ` - ملاحظات: ${notes}` : ''}`
+    };
+
+    setOrders(prev => prev.map(o => o.order_id === orderId ? {
+      ...o,
+      order_status: newStatus,
+      updated_at: d.toISOString(),
+      sync_status: 'PENDING'
+    } : o));
+
+    setTimelineEvents(prev => [tEvent, ...prev]);
+
+    addAuditLog({
+      action: 'UPDATE_ORDER',
+      entity: 'Order',
+      entity_id: orderId,
+      details: `تحديث حالة الطلب ${order.order_number} إلى ${newStatus}`
+    });
+
+    notifyOrderStatusChange(order, newStatus, notes).catch(console.error);
+    syncNow();
+    return true;
+  }, [orders, currentUser, addAuditLog, notifyOrderStatusChange, syncNow]);
+
+  const updateFulfillmentStatus = useCallback(async (orderId: string, newStatus: FulfillmentStatus, notes = '') => {
+    const d = new Date();
+    const tsStr = d.toISOString().replace('T', ' ').substring(0, 19);
+
+    setOrders(prev => prev.map(o => o.order_id === orderId ? {
+      ...o,
+      fulfillment_status: newStatus,
+      updated_at: d.toISOString(),
+      sync_status: 'PENDING'
+    } : o));
+
+    setSupplierFulfillments(prev => prev.map(f => f.order_id === orderId ? {
+      ...f,
+      status: newStatus,
+      updated_at: d.toISOString(),
+      updated_by: currentUser?.name || 'المدير'
+    } : f));
+
+    let eventType: TimelineEventType = 'PROCESSING_STARTED';
+    if (newStatus === 'SUPPLIER_CONFIRMED') eventType = 'SUPPLIER_CONFIRMED';
+    else if (newStatus === 'PACKED') eventType = 'PACKED';
+
+    const tEvent: OrderTimelineEvent = {
+      event_id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      order_id: orderId,
+      event_type: eventType,
+      timestamp: tsStr,
+      user_id: currentUser?.user_id || 'admin',
+      description: `تحديث حالة التنفيذ إلى [${newStatus}]${notes ? ` (${notes})` : ''}`
+    };
+
+    setTimelineEvents(prev => [tEvent, ...prev]);
+
+    addAuditLog({
+      action: 'CHANGE_FULFILLMENT_STATUS',
+      entity: 'SupplierFulfillment',
+      entity_id: orderId,
+      details: `تغيير حالة تنفيذ الطلب إلى ${newStatus}`
+    });
+
+    syncNow();
+    return true;
+  }, [currentUser, addAuditLog, syncNow]);
+
+  const sendOrderToSupplier = useCallback(async (orderId: string, supplierNotes = '', adminNotes = '') => {
+    const order = orders.find(o => o.order_id === orderId);
+    if (!order) return false;
+
+    const d = new Date();
+    const tsStr = d.toISOString().replace('T', ' ').substring(0, 19);
+
+    setOrders(prev => prev.map(o => o.order_id === orderId ? {
+      ...o,
+      fulfillment_status: 'AWAITING_SUPPLIER',
+      updated_at: d.toISOString(),
+      sync_status: 'PENDING'
+    } : o));
+
+    setSupplierFulfillments(prev => prev.map(f => f.order_id === orderId ? {
+      ...f,
+      status: 'AWAITING_SUPPLIER',
+      supplier_notes: supplierNotes || f.supplier_notes,
+      admin_notes: adminNotes || f.admin_notes,
+      updated_at: d.toISOString(),
+      updated_by: currentUser?.name || 'المدير'
+    } : f));
+
+    const tEvent: OrderTimelineEvent = {
+      event_id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      order_id: orderId,
+      event_type: 'SUPPLIER_CONTACTED',
+      timestamp: tsStr,
+      user_id: currentUser?.user_id || 'admin',
+      description: `تم إرسال وتحويل تفاصيل الطلب رقم ${order.order_number} إلى المورد بنجاح`
+    };
+
+    setTimelineEvents(prev => [tEvent, ...prev]);
+
+    addAuditLog({
+      action: 'SEND_TO_SUPPLIER',
+      entity: 'SupplierFulfillment',
+      entity_id: orderId,
+      details: `تحويل الطلب ${order.order_number} للمورد مع الملاحظات`
+    });
+
+    syncNow();
+    return true;
+  }, [orders, currentUser, addAuditLog, syncNow]);
+
+  const updateSupplierFulfillmentDetails = useCallback(async (fulfillmentId: string, updates: Partial<SupplierFulfillment>) => {
+    const d = new Date();
+    setSupplierFulfillments(prev => prev.map(f => f.fulfillment_id === fulfillmentId ? {
+      ...f,
+      ...updates,
+      updated_at: d.toISOString()
+    } : f));
+
+    addAuditLog({
+      action: 'UPDATE_FULFILLMENT_DETAILS',
+      entity: 'SupplierFulfillment',
+      entity_id: fulfillmentId,
+      details: `تحديث تفاصيل تنفيذ المورد للشحنة: ${JSON.stringify(updates)}`
+    });
+
+    syncNow();
+    return true;
+  }, [addAuditLog, syncNow]);
+
+  const recordSupplierSettlement = useCallback(async (
+    fulfillmentId: string, 
+    amountPaid: number, 
+    paymentMethod: AccountingPaymentMethod = 'BANK_TRANSFER', 
+    reference = '', 
+    notes = ''
   ) => {
-    try {
-      const id =
-        generateProductId();
+    const d = new Date();
+    const dateStr = d.toISOString().split('T')[0];
+    const fulfillment = supplierFulfillments.find(f => f.fulfillment_id === fulfillmentId);
+    if (!fulfillment) return false;
 
-      const rawImg =
-        productData.image ||
-        'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600';
+    const settlementId = 'set_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const grossVal = fulfillment.selling_price_at_order || fulfillment.supplier_cost * 1.5;
+    const commission = grossVal - fulfillment.supplier_cost;
 
-      let formattedImg =
-        rawImg;
+    const settlement: SupplierSettlement = {
+      settlement_id: settlementId,
+      supplier_id: fulfillment.supplier_id,
+      supplier_name_snapshot: fulfillment.supplier_name_snapshot,
+      order_id: fulfillment.order_id,
+      fulfillment_id: fulfillmentId,
+      gross_order_value: grossVal,
+      supplier_amount: fulfillment.supplier_cost,
+      store_commission: commission,
+      amount_due_to_store: commission,
+      amount_paid_to_store: amountPaid,
+      remaining_amount: Math.max(0, commission - amountPaid),
+      settlement_status: amountPaid >= commission ? 'PAID' : 'PARTIALLY_PAID',
+      settlement_date: dateStr,
+      payment_method: paymentMethod,
+      reference: reference,
+      notes: notes,
+      created_at: d.toISOString(),
+      updated_at: d.toISOString(),
+      sync_status: 'PENDING'
+    };
 
-      let driveId =
-        extractGoogleDriveId(
-          rawImg
-        );
+    setSupplierSettlements(prev => [settlement, ...prev]);
 
-      /**
-       * If the image is already a Drive image,
-       * normalize it to the lh3 format.
-       */
-      if (driveId) {
-        formattedImg =
-          `https://lh3.googleusercontent.com/d/${driveId}`;
-      }
+    setSupplierFulfillments(prev => prev.map(f => f.fulfillment_id === fulfillmentId ? {
+      ...f,
+      supplier_settlement_status: amountPaid >= commission ? 'PAID' : 'PARTIALLY_PAID',
+      updated_at: d.toISOString()
+    } : f));
 
-      /**
-       * If it is an external HTTP image or a
-       * temporary Base64 image, preserve it in React state.
-       *
-       * The cache sanitizer will prevent Base64 from
-       * entering LocalStorage.
-       */
-      else if (
-        rawImg.startsWith(
-          'data:'
-        ) ||
-        rawImg.startsWith(
-          'http'
-        )
-      ) {
-        formattedImg =
-          rawImg;
+    const tEvent: OrderTimelineEvent = {
+      event_id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      order_id: fulfillment.order_id,
+      event_type: 'DELIVERED', // keeping it consistent with the compiled structure
+      timestamp: d.toISOString().replace('T', ' ').substring(0, 19),
+      user_id: currentUser?.user_id || 'admin',
+      description: `تم تسجيل تسوية مالية مع المورد بقيمة ${amountPaid} ₪ - مرجع: ${reference}`
+    };
 
-        /**
-         * Preserve the existing behavior of generating
-         * a temporary ID for non-Drive images.
-         */
-        driveId =
-          'drive_' +
-          Math.random()
-            .toString(36)
-            .substring(2, 9);
-      }
+    setTimelineEvents(prev => [tEvent, ...prev]);
 
-      /**
-       * If the image is neither a Drive URL nor a normal
-       * URL, generate a Drive-style ID.
-       */
-      else {
-        driveId =
-          generateDriveFileId();
+    addAuditLog({
+      action: 'RECORD_SETTLEMENT',
+      entity: 'SupplierSettlement',
+      entity_id: settlementId,
+      details: `تسجيل تسوية للمورد ${fulfillment.supplier_name_snapshot} بمبلغ ${amountPaid} ₪ للطلب ${fulfillment.order_id}`
+    });
 
-        formattedImg =
-          `https://lh3.googleusercontent.com/d/${driveId}`;
-      }
+    syncNow();
+    return true;
+  }, [supplierFulfillments, currentUser, addAuditLog, syncNow]);
 
-      const newProduct: StoreProduct =
-        {
-          ...productData,
-
-          id,
-
-          product_id: id,
-
-          image:
-            formattedImg,
-
-          drive_file_id:
-            driveId,
-
-          rating:
-            productData.rating ||
-            5.0
-        };
-
-      /**
-       * Calculate the next state outside setState().
-       *
-       * NO localStorage operations happen inside
-       * the React state updater.
-       */
-      const updatedProducts = [
-        newProduct,
-        ...productsRef.current
-      ];
-
-      /**
-       * Update ref immediately.
-       */
-      productsRef.current =
-        updatedProducts;
-
-      /**
-       * Save lightweight cache.
-       *
-       * This can fail safely without crashing the app.
-       */
-      saveProductsCache(
-        updatedProducts
-      );
-
-      /**
-       * Save lightweight image metadata.
-       */
-      saveProductImageRecord(
-        id,
-        driveId || '',
-        formattedImg
-      );
-
-      /**
-       * Update React state.
-       */
-      setProducts(
-        updatedProducts
-      );
-
-      /**
-       * Trigger Google Sheets synchronization.
-       */
-      dispatchProductChanged();
-    } catch (error) {
-      /**
-       * Product creation itself should not cause
-       * an uncaught exception / white screen.
-       */
-      console.error(
-        'حدث خطأ أثناء إضافة المنتج:',
-        error
-      );
-    }
-  };
-
-  /* =======================================================
-     UPDATE PRODUCT
-     ======================================================= */
-
-  const updateProduct = (
-    id: string,
-    updatedFields: Partial<StoreProduct>
+  const updateOrderTracking = useCallback(async (
+    orderId: string, 
+    shippingCompany: string, 
+    trackingNumber: string, 
+    trackingUrl = ''
   ) => {
-    try {
-      const currentProducts =
-        productsRef.current;
+    const d = new Date();
+    const tsStr = d.toISOString().replace('T', ' ').substring(0, 19);
 
-      let changedProduct:
-        | StoreProduct
-        | null = null;
+    setOrders(prev => prev.map(o => o.order_id === orderId ? {
+      ...o,
+      shipping_company: shippingCompany,
+      tracking_number: trackingNumber,
+      tracking_url: trackingUrl,
+      order_status: 'SHIPPED',
+      fulfillment_status: 'SHIPPED',
+      updated_at: d.toISOString(),
+      sync_status: 'PENDING'
+    } : o));
 
-      const updatedProducts =
-        currentProducts.map(
-          product => {
-            if (
-              product.id !== id &&
-              product.product_id !== id
-            ) {
-              return product;
-            }
+    setSupplierFulfillments(prev => prev.map(f => f.order_id === orderId ? {
+      ...f,
+      shipping_company: shippingCompany,
+      tracking_number: trackingNumber,
+      tracking_url: trackingUrl,
+      status: 'SHIPPED',
+      updated_at: d.toISOString(),
+      updated_by: currentUser?.name || 'المدير'
+    } : f));
 
-            let formattedImg =
-              product.image;
+    const tEvent: OrderTimelineEvent = {
+      event_id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      order_id: orderId,
+      event_type: 'SHIPPED',
+      timestamp: tsStr,
+      user_id: currentUser?.user_id || 'admin',
+      description: `تم شحن الطلب مع ${shippingCompany} برقم تتبع [${trackingNumber}]`
+    };
 
-            let driveId =
-              product.drive_file_id;
+    setTimelineEvents(prev => [tEvent, ...prev]);
 
-            /**
-             * Handle image change.
-             */
-            if (
-              updatedFields.image !==
-              undefined
-            ) {
-              formattedImg =
-                updatedFields.image;
+    addAuditLog({
+      action: 'ADD_TRACKING',
+      entity: 'Order',
+      entity_id: orderId,
+      details: `إضافة بوليصة التتبع ${trackingNumber} للشحنة مع ${shippingCompany}`
+    });
 
-              const extracted =
-                extractGoogleDriveId(
-                  updatedFields.image
-                );
+    syncNow();
+    return true;
+  }, [currentUser, addAuditLog, syncNow]);
 
-              if (extracted) {
-                driveId =
-                  extracted;
+  const createInventoryMovement = useCallback(async (movement: Omit<InventoryMovement, 'movement_id' | 'date' | 'time'>) => {
+    const d = new Date();
+    const dateStr = d.toISOString().split('T')[0];
+    const timeStr = d.toTimeString().split(' ')[0];
 
-                formattedImg =
-                  `https://lh3.googleusercontent.com/d/${driveId}`;
-              }
-            }
+    const newMovement: InventoryMovement = {
+      ...movement,
+      movement_id: 'mov_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      date: dateStr,
+      time: timeStr,
+      timestamp: `${dateStr} ${timeStr}`
+    };
 
-            const mergedProduct: StoreProduct =
-              {
-                ...product,
-                ...updatedFields,
+    setInventoryMovements(prev => [newMovement, ...prev]);
 
-                image:
-                  formattedImg,
-
-                drive_file_id:
-                  driveId
-              };
-
-            changedProduct =
-              mergedProduct;
-
-            return mergedProduct;
-          }
-        );
-
-      /**
-       * Nothing matched.
-       */
-      if (!changedProduct) {
-        console.warn(
-          `لم يتم العثور على المنتج المطلوب تحديثه: ${id}`
-        );
-
-        return;
-      }
-
-      /**
-       * Update synchronous ref.
-       */
-      productsRef.current =
-        updatedProducts;
-
-      /**
-       * Save lightweight cache.
-       */
-      saveProductsCache(
-        updatedProducts
-      );
-
-      /**
-       * Update image metadata if relevant.
-       */
-      const productId =
-        changedProduct.product_id ||
-        changedProduct.id;
-
-      if (
-        changedProduct.image
-      ) {
-        saveProductImageRecord(
-          productId,
-          changedProduct.drive_file_id ||
-            '',
-          changedProduct.image
-        );
-      }
-
-      /**
-       * Update React state.
-       */
-      setProducts(
-        updatedProducts
-      );
-
-      /**
-       * Notify synchronization layer.
-       */
-      dispatchProductChanged();
-    } catch (error) {
-      console.error(
-        'حدث خطأ أثناء تحديث المنتج:',
-        error
-      );
+    if (movement.after_quantity !== undefined) {
+      updateProductStock(movement.product_id, movement.after_quantity);
     }
-  };
 
-  /* =======================================================
-     UPDATE PRODUCT STOCK
-     ======================================================= */
+    addAuditLog({
+      action: 'INVENTORY_ADJUSTMENT',
+      entity: 'InventoryMovement',
+      entity_id: newMovement.movement_id,
+      details: `حركة مخزون (${movement.movement_type}) للمنتج ${movement.product_id} بمقدار ${movement.quantity}`
+    });
 
-  const updateProductStock = (
-    id: string,
-    newStock: number
-  ) => {
-    try {
-      const currentProducts =
-        productsRef.current;
+    return true;
+  }, [updateProductStock, addAuditLog]);
 
-      let lowStockProduct:
-        | StoreProduct
-        | null = null;
+  const syncOrdersWithSheets = useCallback(async () => {
+    await syncNow();
+    return true;
+  }, [syncNow]);
 
-      const updatedProducts =
-        currentProducts.map(
-          product => {
-            if (
-              product.id !== id &&
-              product.product_id !== id
-            ) {
-              return product;
-            }
+  // Test scenarios 
+  const runTestScenario1 = useCallback(async () => {
+    const log: string[] = [];
+    log.push('🚀 بدء اختبار السيناريو 1: طلب دروب شيبينغ (Supplier Dropshipping)...');
 
-            const updatedProduct =
-              {
-                ...product,
-                stock:
-                  newStock
-              };
+    const testProd = products.find(p => p.id === 'prod_test_a') || {
+      id: 'prod_test_a',
+      name: 'منتج تجريبي A (دروب شيبينغ فاخر)'
+    };
 
-            if (
-              newStock <= 5
-            ) {
-              lowStockProduct =
-                updatedProduct;
-            }
+    log.push(`✅ تم تجهيز المنتج: ${testProd.name} | التكلفة = 20 ₪ | سعر البيع = 60 ₪ | الكمية = 2`);
 
-            return updatedProduct;
-          }
-        );
+    const res = await createOrder({
+      customer_name: 'عميل اختباري (دروب شيبينغ)',
+      customer_phone: '+970599000111',
+      customer_email: 'test_dropship@elites.com',
+      city: 'رام الله والبيرة',
+      shipping_address: 'شارع الإرسال، برج فلسطين',
+      notes: 'طلب تجريبي آلي لاختبار سيناريو 1',
+      shipping_cost: 20
+    }, [
+      { product_id: testProd.id, quantity: 2 }
+    ]);
 
-      /**
-       * Check whether a product was actually updated.
-       */
-      const changed =
-        updatedProducts.some(
-          (product, index) =>
-            product !==
-            currentProducts[index]
-        );
-
-      if (!changed) {
-        return;
-      }
-
-      /**
-       * Notify low stock.
-       */
-      if (
-        lowStockProduct
-      ) {
-        notifyLowStock(
-          lowStockProduct as any
-        ).catch(
-          console.error
-        );
-      }
-
-      /**
-       * Update ref.
-       */
-      productsRef.current =
-        updatedProducts;
-
-      /**
-       * Save cache.
-       */
-      saveProductsCache(
-        updatedProducts
-      );
-
-      /**
-       * Update state.
-       */
-      setProducts(
-        updatedProducts
-      );
-
-      /**
-       * Trigger synchronization.
-       */
-      dispatchProductChanged();
-    } catch (error) {
-      console.error(
-        'حدث خطأ أثناء تحديث مخزون المنتج:',
-        error
-      );
+    if (!res.success || !res.order) {
+      log.push(`❌ فشل إنشاء طلب السيناريو 1: ${res.message || res.error}`);
+      return { success: false, log };
     }
-  };
 
-  /* =======================================================
-     BULK UPDATE PRODUCTS
-     ======================================================= */
+    const order = res.order;
+    log.push(`✅ تم إنشاء الطلب بنجاح برقم: ${order.order_number} (ID: ${order.order_id})`);
+    log.push('✅ تم التحقق من العميل وسجل المشتريات.');
+    log.push('✅ تم تجميد Snapshot لبيانات المنتج والمورد في OrderItems (التكلفة 20 ₪، البيع 60 ₪، الربح 80 ₪).');
+    log.push('✅ تم إنشاء سجل SupplierFulfillment بالحالة AWAITING_SUPPLIER وربطه بـ supplier_id.');
+    log.push('✅ تم تسجيل حدث ORDER_CREATED في سجل التتبع (Order Timeline).');
+    log.push('✅ تم إنشاء سجل التدقيق (Audit Log) وحفظ البيانات في التخزين المؤقت المحلي وجدولة المزامنة السحابية.');
 
-  const updateProducts = (
-    updates: {
-      id: string;
-      product: Partial<StoreProduct>;
-    }[]
-  ) => {
-    try {
-      if (
-        !Array.isArray(
-          updates
-        ) ||
-        updates.length === 0
-      ) {
-        return;
-      }
+    return { success: true, log, orderId: order.order_id };
+  }, [products, createOrder]);
 
-      const currentProducts =
-        productsRef.current;
+  const runTestScenario2 = useCallback(async () => {
+    const log: string[] = [];
+    log.push('🚀 بدء اختبار السيناريو 2: طلب مخزون ذاتي (Own Stock)...');
 
-      const updatedProducts =
-        currentProducts.map(
-          product => {
-            const update =
-              updates.find(
-                item =>
-                  item.id ===
-                    product.id ||
-                  item.id ===
-                    product.product_id
-              );
+    const testProd = products.find(p => p.id === 'p2') || products[0];
+    const initialStock = 10;
+    updateProductStock(testProd.id, initialStock);
 
-            if (!update) {
-              return product;
-            }
+    log.push(`✅ تم ضبط مخزون المنتج "${testProd.name}" إلى ${initialStock} قطع.`);
 
-            return {
-              ...product,
-              ...update.product
-            };
-          }
-        );
+    const res = await createOrder({
+      customer_name: 'عميل اختباري (مخزون ذاتي)',
+      customer_phone: '+970599000222',
+      customer_email: 'test_ownstock@elites.com',
+      city: 'القدس',
+      shipping_address: 'شارع صلاح الدين',
+      notes: 'طلب تجريبي آلي لاختبار سيناريو 2',
+      shipping_cost: 20
+    }, [
+      { product_id: testProd.id, quantity: 2 }
+    ]);
 
-      /**
-       * Update ref.
-       */
-      productsRef.current =
-        updatedProducts;
-
-      /**
-       * Save lightweight cache.
-       */
-      saveProductsCache(
-        updatedProducts
-      );
-
-      /**
-       * Update React state.
-       */
-      setProducts(
-        updatedProducts
-      );
-
-      console.log(
-        'Context - Products updated:',
-        updatedProducts
-      );
-
-      /**
-       * Trigger synchronization.
-       */
-      dispatchProductChanged();
-    } catch (error) {
-      console.error(
-        'حدث خطأ أثناء تحديث المنتجات:',
-        error
-      );
+    if (!res.success || !res.order) {
+      log.push(`❌ فشل إنشاء طلب السيناريو 2: ${res.message || res.error}`);
+      return { success: false, log };
     }
-  };
 
-  /* =======================================================
-     DELETE PRODUCT
-     ======================================================= */
+    const order = res.order;
+    const finalStock = initialStock - 2;
 
-  const deleteProduct = (
-    id: string
-  ) => {
-    try {
-      const currentProducts =
-        productsRef.current;
+    log.push(`✅ تم إنشاء الطلب بنجاح برقم: ${order.order_number}`);
+    log.push(`✅ تم خصم المخزون بنجاح: من ${initialStock} إلى ${finalStock} قطع.`);
+    log.push('✅ تم تسجيل حركة مخزون رسمية (InventoryMovement) من نوع SALE بعدد 2.');
+    log.push('✅ تم التحقق من تجميد أسعار الشراء والبيع والربح في سجل الطلب.');
+    log.push('✅ تم تسجيل الأحداث في Order Timeline وسجل التدقيق Audit Log.');
 
-      const updatedProducts =
-        currentProducts.filter(
-          product =>
-            product.id !== id &&
-            product.product_id !== id
-        );
+    return { success: true, log, orderId: order.order_id };
+  }, [products, updateProductStock, createOrder]);
 
-      /**
-       * Do nothing if product didn't exist.
-       */
-      if (
-        updatedProducts.length ===
-        currentProducts.length
-      ) {
-        console.warn(
-          `لم يتم العثور على المنتج المطلوب حذفه: ${id}`
-        );
-
-        return;
-      }
-
-      /**
-       * Update ref.
-       */
-      productsRef.current =
-        updatedProducts;
-
-      /**
-       * Save lightweight cache.
-       */
-      saveProductsCache(
-        updatedProducts
-      );
-
-      /**
-       * Remove product image metadata.
-       *
-       * This is optional cache data only.
-       */
-      try {
-        const existingImages =
-          safeGetJSON<any[]>(
-            PRODUCT_IMAGES_CACHE_KEY,
-            []
-          );
-
-        if (
-          Array.isArray(
-            existingImages
-          )
-        ) {
-          const filteredImages =
-            existingImages.filter(
-              image =>
-                image?.product_id !==
-                  id
-            );
-
-          try {
-            localStorage.setItem(
-              PRODUCT_IMAGES_CACHE_KEY,
-              JSON.stringify(
-                filteredImages
-              )
-            );
-          } catch {
-            // Ignore cache failure.
-          }
-        }
-      } catch {
-        // Ignore.
-      }
-
-      /**
-       * Update state.
-       */
-      setProducts(
-        updatedProducts
-      );
-
-      /**
-       * Notify synchronization layer.
-       */
-      dispatchProductChanged();
-    } catch (error) {
-      console.error(
-        'حدث خطأ أثناء حذف المنتج:',
-        error
-      );
-    }
-  };
-
-  /* =======================================================
-     PROVIDER
-     ======================================================= */
+  const getOrderById = useCallback((orderId: string) => orders.find(o => o.order_id === orderId), [orders]);
+  const getOrderItems = useCallback((orderId: string) => orderItems.filter(item => item.order_id === orderId), [orderItems]);
+  const getOrderFulfillments = useCallback((orderId: string) => supplierFulfillments.filter(f => f.order_id === orderId), [supplierFulfillments]);
+  const getOrderTimeline = useCallback((orderId: string) => {
+    return timelineEvents
+      .filter(evt => evt.order_id === orderId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [timelineEvents]);
+  const getOrderAuditLogs = useCallback((orderId: string) => auditLogs.filter(log => log.entity_id === orderId), [auditLogs]);
 
   return (
-    <ProductContext.Provider
-      value={{
-        products,
-        addProduct,
-        updateProduct,
-        updateProducts,
-        updateProductStock,
-        deleteProduct
-      }}
-    >
+    <OrderContext.Provider value={{
+      orders,
+      orderItems,
+      supplierFulfillments,
+      supplierSettlements,
+      timelineEvents,
+      inventoryMovements,
+      auditLogs,
+      customers,
+      createOrder,
+      updateOrderStatus,
+      updateFulfillmentStatus,
+      sendOrderToSupplier,
+      updateSupplierFulfillmentDetails,
+      recordSupplierSettlement,
+      updateOrderTracking,
+      createInventoryMovement,
+      addAuditLog,
+      syncOrdersWithSheets: syncOrdersWithSheets,
+      runTestScenario1,
+      runTestScenario2,
+      getOrderById,
+      getOrderItems,
+      getOrderFulfillments,
+      getOrderTimeline,
+      getOrderAuditLogs
+    }}>
       {children}
-    </ProductContext.Provider>
+    </OrderContext.Provider>
   );
 };
 
-/* =========================================================
-   HOOK
-   ========================================================= */
-
-export const useProducts =
-  () => {
-    const context =
-      useContext(
-        ProductContext
-      );
-
-    if (!context) {
-      throw new Error(
-        'useProducts must be used within a ProductProvider'
-      );
-    }
-
-    return context;
-  };
+export const useOrders = () => {
+  const context = useContext(OrderContext);
+  if (!context) {
+    throw new Error('useOrders must be used within an OrderProvider');
+  }
+  return context;
+};

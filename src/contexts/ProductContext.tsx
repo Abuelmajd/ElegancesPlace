@@ -7,10 +7,11 @@ import React, {
 } from 'react';
 
 import { useNotifications } from './NotificationContext';
+import { useGoogleSheets } from './GoogleSheetsContext';
 
 import {
   extractGoogleDriveId,
-  generateDriveFileId
+  formatGoogleDriveDirectUrl
 } from '../utils/googleDriveUtils';
 
 import { ProductImage } from '../types';
@@ -35,7 +36,11 @@ export interface StoreProduct {
   supplier: string;
   supplier_id?: string;
   stock: number;
-  fulfillment_method?: 'OWN_STOCK' | 'SUPPLIER_DROPSHIPPING';
+
+  fulfillment_method?:
+    | 'OWN_STOCK'
+    | 'SUPPLIER_DROPSHIPPING';
+
   description?: string;
   rating?: number;
   featured?: boolean;
@@ -45,40 +50,48 @@ export interface StoreProduct {
 
 interface ProductContextType {
   products: StoreProduct[];
-  addProduct: (product: Omit<StoreProduct, 'id'>) => void;
+
+  addProduct: (
+    product: Omit<StoreProduct, 'id'>
+  ) => Promise<boolean>;
+
   updateProduct: (
     id: string,
     product: Partial<StoreProduct>
-  ) => void;
+  ) => Promise<boolean>;
+
   updateProducts: (
     updates: {
       id: string;
       product: Partial<StoreProduct>;
     }[]
   ) => void;
+
   updateProductStock: (
     id: string,
     newStock: number
   ) => void;
-  deleteProduct: (id: string) => void;
+
+  deleteProduct: (
+    id: string
+  ) => void;
 }
 
 /* =========================================================
    CONSTANTS
    ========================================================= */
 
-const PRODUCTS_CACHE_KEY = 'elites_store_products';
+const PRODUCTS_CACHE_KEY =
+  'elites_store_products';
 
-const LEGACY_PRODUCTS_CACHE_KEY = 'elites_products';
+const LEGACY_PRODUCTS_CACHE_KEY =
+  'elites_products';
 
 const PRODUCT_IMAGES_CACHE_KEY =
   'elites_product_images';
 
-const DRIVE_FOLDER_KEY =
-  'elites_drive_folder_id';
-
 const DEFAULT_DRIVE_FOLDER_ID =
-  '18P3PH04v9MOJ5D-f_MNkRKpI1K_i60-R';
+  '1JfMshA_FjBRifRRqci0E-jZaoLhESWNl';
 
 /* =========================================================
    DEFAULT PRODUCTS
@@ -174,28 +187,22 @@ const DEFAULT_PRODUCTS: StoreProduct[] = [
 ];
 
 /* =========================================================
-   HELPERS
+   LOCAL STORAGE HELPERS
    ========================================================= */
 
-/**
- * Safely read JSON from localStorage.
- *
- * Any localStorage error must never crash the application.
- */
 function safeGetJSON<T>(
   key: string,
   fallback: T
 ): T {
   try {
-    const raw = localStorage.getItem(key);
+    const raw =
+      localStorage.getItem(key);
 
     if (!raw) {
       return fallback;
     }
 
-    const parsed = JSON.parse(raw);
-
-    return parsed as T;
+    return JSON.parse(raw) as T;
   } catch (error) {
     console.warn(
       `تعذر قراءة localStorage key: ${key}`,
@@ -206,10 +213,9 @@ function safeGetJSON<T>(
   }
 }
 
-/**
- * Safely remove a localStorage item.
- */
-function safeRemoveItem(key: string): void {
+function safeRemoveItem(
+  key: string
+): void {
   try {
     localStorage.removeItem(key);
   } catch (error) {
@@ -220,11 +226,10 @@ function safeRemoveItem(key: string): void {
   }
 }
 
-/**
- * Convert ProductImage objects to lightweight cache objects.
- *
- * We deliberately remove possible Base64/binary fields.
- */
+/* =========================================================
+   IMAGE CACHE HELPERS
+   ========================================================= */
+
 function sanitizeProductImagesForCache(
   images: ProductImage[] | undefined
 ): any[] | undefined {
@@ -233,7 +238,10 @@ function sanitizeProductImagesForCache(
   }
 
   return images.map((image: any) => {
-    if (!image || typeof image !== 'object') {
+    if (
+      !image ||
+      typeof image !== 'object'
+    ) {
       return image;
     }
 
@@ -249,22 +257,9 @@ function sanitizeProductImagesForCache(
   });
 }
 
-/**
- * Create a lightweight product for localStorage.
- *
- * IMPORTANT:
- * The full product remains in React state.
- *
- * LocalStorage receives only the information needed
- * for offline cache/synchronization.
- *
- * Large Base64 image data is intentionally removed.
- */
 function sanitizeProductForCache(
   product: StoreProduct
-): Partial<StoreProduct> & {
-  id: string;
-} {
+): any {
   const {
     image_data,
     images,
@@ -275,41 +270,29 @@ function sanitizeProductForCache(
     ...rest
   };
 
-  /**
-   * Keep image metadata but never store Base64.
-   */
   if (images) {
     lightweight.images =
-      sanitizeProductImagesForCache(images);
+      sanitizeProductImagesForCache(
+        images
+      );
   }
 
-  /**
-   * If the main image itself is a Base64 data URL,
-   * do NOT put it into localStorage.
-   *
-   * This prevents a single product from consuming
-   * megabytes of browser storage.
+  /*
+   * ممنوع تخزين Base64 في localStorage.
    */
   if (
-    typeof lightweight.image === 'string' &&
-    lightweight.image.startsWith('data:')
+    typeof lightweight.image ===
+      'string' &&
+    lightweight.image.startsWith(
+      'data:'
+    )
   ) {
-    /**
-     * We keep an empty image in the cache.
-     *
-     * The actual React state still contains the original
-     * image until the Drive upload process replaces it.
-     */
     lightweight.image = '';
   }
 
   return lightweight;
 }
 
-/**
- * Convert the complete product array into a lightweight
- * LocalStorage cache.
- */
 function sanitizeProductsForCache(
   products: StoreProduct[]
 ): any[] {
@@ -318,22 +301,18 @@ function sanitizeProductsForCache(
   );
 }
 
-/**
- * Safely save products cache.
- *
- * This function MUST NEVER throw.
- *
- * If the browser quota is exceeded, the application
- * continues working normally.
- */
 function saveProductsCache(
   products: StoreProduct[]
 ): void {
   const lightweightProducts =
-    sanitizeProductsForCache(products);
+    sanitizeProductsForCache(
+      products
+    );
 
   const serialized =
-    JSON.stringify(lightweightProducts);
+    JSON.stringify(
+      lightweightProducts
+    );
 
   try {
     localStorage.setItem(
@@ -341,21 +320,14 @@ function saveProductsCache(
       serialized
     );
 
-    /**
-     * Successful save.
-     */
     return;
   } catch (error) {
     console.warn(
-      'تعذر حفظ المنتجات في LocalStorage. سيتم تنظيف الكاش القديم والمحاولة مرة أخرى.',
+      'تعذر حفظ المنتجات في LocalStorage. سيتم تنظيف الكاش.',
       error
     );
   }
 
-  /**
-   * If quota was exceeded, remove known heavy/legacy
-   * caches and retry once.
-   */
   try {
     safeRemoveItem(
       LEGACY_PRODUCTS_CACHE_KEY
@@ -365,11 +337,12 @@ function saveProductsCache(
       'elites_recent_drive_images'
     );
 
-    /**
-     * Remove old session image previews.
+    /*
+     * تنظيف معاينات Drive القديمة من sessionStorage.
      */
     try {
-      const keysToRemove: string[] = [];
+      const keysToRemove: string[] =
+        [];
 
       for (
         let i = 0;
@@ -401,12 +374,12 @@ function saveProductsCache(
               key
             );
           } catch {
-            // Ignore.
+            // ignore
           }
         }
       );
     } catch {
-      // Ignore sessionStorage errors.
+      // ignore
     }
 
     localStorage.setItem(
@@ -414,54 +387,34 @@ function saveProductsCache(
       serialized
     );
   } catch (retryError) {
-    /**
-     * The cache is optional.
-     *
-     * Even if this fails, the application MUST continue.
-     */
     console.warn(
-      'تعذر حفظ كاش المنتجات حتى بعد تنظيف التخزين المحلي. سيتم الاعتماد على الحالة الحالية وGoogle Sheets.',
+      'تعذر حفظ كاش المنتجات بعد التنظيف.',
       retryError
     );
   }
 }
 
-/**
- * Safely save product image metadata.
- *
- * These records contain URLs and IDs only.
- * No Base64 data is stored.
- */
+/* =========================================================
+   PRODUCT IMAGE METADATA
+   ========================================================= */
+
 function saveProductImageRecord(
   productId: string,
   driveId: string,
-  imageUrl: string
+  imageUrl: string,
+  folderId?: string
 ): void {
   try {
-    const raw =
-      localStorage.getItem(
-        PRODUCT_IMAGES_CACHE_KEY
+    const records =
+      safeGetJSON<any[]>(
+        PRODUCT_IMAGES_CACHE_KEY,
+        []
       );
 
-    let records: any[] = [];
-
-    try {
-      const parsed = raw
-        ? JSON.parse(raw)
+    const safeRecords =
+      Array.isArray(records)
+        ? records
         : [];
-
-      if (Array.isArray(parsed)) {
-        records = parsed;
-      }
-    } catch {
-      records = [];
-    }
-
-    const folderId =
-      localStorage.getItem(
-        DRIVE_FOLDER_KEY
-      ) ||
-      DEFAULT_DRIVE_FOLDER_ID;
 
     const record = {
       image_id:
@@ -476,18 +429,29 @@ function saveProductImageRecord(
       image_url:
         imageUrl || '',
 
-      folder_path:
-        `Google Drive / Product Images Folder (${folderId})`,
+      /*
+       * إذا كان لدينا مجلد المنتج الحقيقي
+       * نستخدمه.
+       *
+       * وإلا نستخدم المجلد الرئيسي فقط
+       * كمرجع احتياطي.
+       */
+      folder_id:
+        folderId ||
+        DEFAULT_DRIVE_FOLDER_ID,
 
-      is_primary: true,
+      is_primary:
+        true,
 
-      sort_order: 1
+      sort_order:
+        1
     };
 
     const updatedRecords = [
       record,
-      ...records.filter(
-        (image: any) =>
+
+      ...safeRecords.filter(
+        image =>
           image?.product_id !==
           productId
       )
@@ -501,18 +465,11 @@ function saveProductImageRecord(
         )
       );
     } catch (storageError) {
-      /**
-       * Product image metadata is optional cache.
-       * Never let it crash the product operation.
-       */
       console.warn(
-        'تعذر حفظ بيانات صورة المنتج في LocalStorage:',
+        'تعذر حفظ بيانات صورة المنتج:',
         storageError
       );
 
-      /**
-       * Try once after removing the old cache.
-       */
       try {
         safeRemoveItem(
           PRODUCT_IMAGES_CACHE_KEY
@@ -525,7 +482,7 @@ function saveProductImageRecord(
           ])
         );
       } catch {
-        // Ignore.
+        // ignore
       }
     }
   } catch (error) {
@@ -536,9 +493,10 @@ function saveProductImageRecord(
   }
 }
 
-/**
- * Generate a product ID.
- */
+/* =========================================================
+   IDS
+   ========================================================= */
+
 function generateProductId(): string {
   return (
     'prod_' +
@@ -550,9 +508,10 @@ function generateProductId(): string {
   );
 }
 
-/**
- * Dispatch the application-level product event safely.
- */
+/* =========================================================
+   EVENTS
+   ========================================================= */
+
 function dispatchProductChanged(): void {
   try {
     window.dispatchEvent(
@@ -566,6 +525,97 @@ function dispatchProductChanged(): void {
       error
     );
   }
+}
+
+/* =========================================================
+   IMAGE DATA HELPERS
+   ========================================================= */
+
+function isBase64Image(
+  value: unknown
+): boolean {
+  return (
+    typeof value ===
+      'string' &&
+    value.startsWith(
+      'data:image/'
+    )
+  );
+}
+
+function getMimeTypeFromDataUrl(
+  dataUrl: string
+): string {
+  const match =
+    dataUrl.match(
+      /^data:(image\/[^;]+);base64,/
+    );
+
+  return (
+    match?.[1] ||
+    'image/jpeg'
+  );
+}
+
+function getFileExtension(
+  fileName: string,
+  mimeType: string
+): string {
+  const existing =
+    fileName.match(
+      /\.([a-zA-Z0-9]+)$/
+    );
+
+  if (existing?.[1]) {
+    return existing[1];
+  }
+
+  const map: Record<
+    string,
+    string
+  > = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif'
+  };
+
+  return (
+    map[mimeType] ||
+    'jpg'
+  );
+}
+
+function makeSafeImageFileName(
+  productName: string,
+  sku: string,
+  originalFileName?: string,
+  mimeType = 'image/jpeg'
+): string {
+  const extension =
+    getFileExtension(
+      originalFileName ||
+        '',
+      mimeType
+    );
+
+  const base =
+    sku ||
+    productName ||
+    'product-image';
+
+  const safeBase =
+    base
+      .replace(
+        /[\\/:*?"<>|#%]/g,
+        '-'
+      )
+      .trim()
+      .substring(0, 80) ||
+    'product-image';
+
+  return `${safeBase}-main.${extension}`;
 }
 
 /* =========================================================
@@ -588,20 +638,16 @@ export const ProductProvider: React.FC<{
     notifyLowStock
   } = useNotifications();
 
-  /**
-   * Load the lightweight product cache.
-   *
-   * We prefer the new key.
-   * The old key is used ONLY for one-time migration.
-   */
+  const {
+    createProductFolder,
+    uploadImageToDrive
+  } = useGoogleSheets();
+
   const [
     products,
     setProducts
   ] = useState<StoreProduct[]>(() => {
     try {
-      /**
-       * 1. New cache key.
-       */
       const currentCache =
         safeGetJSON<any[]>(
           PRODUCTS_CACHE_KEY,
@@ -617,9 +663,6 @@ export const ProductProvider: React.FC<{
         return currentCache as StoreProduct[];
       }
 
-      /**
-       * 2. Legacy cache migration.
-       */
       const legacyCache =
         safeGetJSON<any[]>(
           LEGACY_PRODUCTS_CACHE_KEY,
@@ -632,11 +675,6 @@ export const ProductProvider: React.FC<{
         ) &&
         legacyCache.length > 0
       ) {
-        /**
-         * Do NOT duplicate the legacy data.
-         *
-         * Save it only under the new key.
-         */
         const migrated =
           legacyCache as StoreProduct[];
 
@@ -648,77 +686,34 @@ export const ProductProvider: React.FC<{
       }
     } catch (error) {
       console.warn(
-        'تعذر تحميل منتجات المتجر من LocalStorage:',
+        'تعذر تحميل المنتجات من LocalStorage:',
         error
       );
     }
 
-    /**
-     * 3. Final fallback.
-     */
     return DEFAULT_PRODUCTS;
   });
 
-  /**
-   * Keep a synchronous reference to the latest
-   * products array.
-   *
-   * This allows us to:
-   *
-   * 1. Calculate the next state
-   * 2. Save it to LocalStorage
-   * 3. Update React state
-   * 4. Dispatch synchronization event
-   *
-   * without putting side effects inside setState().
-   */
   const productsRef =
     useRef<StoreProduct[]>(
       products
     );
 
-  /**
-   * Keep ref synchronized with React state.
-   */
   useEffect(() => {
     productsRef.current =
       products;
   }, [products]);
 
-  /**
-   * IMPORTANT:
-   *
-   * We do NOT continuously write the products array
-   * to LocalStorage from this effect.
-   *
-   * Product mutations explicitly update the cache.
-   *
-   * This prevents:
-   *
-   * - duplicate writes
-   * - unnecessary writes
-   * - large repeated JSON serialization
-   * - QuotaExceededError loops
+  /*
+   * حذف المفتاح القديم مرة واحدة.
    */
   useEffect(() => {
-    /**
-     * One-time cleanup of the legacy key.
-     *
-     * It is safe because the new cache has already been
-     * loaded or initialized.
-     */
     try {
-      if (
-        localStorage.getItem(
-          PRODUCTS_CACHE_KEY
-        )
-      ) {
-        safeRemoveItem(
-          LEGACY_PRODUCTS_CACHE_KEY
-        );
-      }
+      safeRemoveItem(
+        LEGACY_PRODUCTS_CACHE_KEY
+      );
     } catch {
-      // Ignore.
+      // ignore
     }
   }, []);
 
@@ -726,77 +721,189 @@ export const ProductProvider: React.FC<{
      ADD PRODUCT
      ======================================================= */
 
-  const addProduct = (
+  const addProduct = async (
     productData: Omit<
       StoreProduct,
       'id'
     >
-  ) => {
+  ): Promise<boolean> => {
     try {
       const id =
         generateProductId();
 
-      const rawImg =
-        productData.image ||
-        'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600';
+      const productName =
+        productData.name?.trim() ||
+        'منتج';
+
+      const sku =
+        productData.sku?.trim() ||
+        `SKU-${Date.now()}`;
 
       let formattedImg =
-        rawImg;
+        productData.image || '';
 
-      let driveId =
+      let driveId:
+        | string
+        | undefined =
         extractGoogleDriveId(
-          rawImg
+          formattedImg
         );
 
-      /**
-       * If the image is already a Drive image,
-       * normalize it to the lh3 format.
-       */
-      if (driveId) {
-        formattedImg =
-          `https://lh3.googleusercontent.com/d/${driveId}`;
-      }
+      let productFolderId:
+        | string
+        | undefined;
 
-      /**
-       * If it is an external HTTP image or a
-       * temporary Base64 image, preserve it in React state.
-       *
-       * The cache sanitizer will prevent Base64 from
-       * entering LocalStorage.
-       */
-      else if (
-        rawImg.startsWith(
-          'data:'
-        ) ||
-        rawImg.startsWith(
-          'http'
+      /* =====================================================
+         IMAGE: BASE64
+         ===================================================== */
+
+      if (
+        isBase64Image(
+          formattedImg
         )
       ) {
-        formattedImg =
-          rawImg;
+        console.log(
+          'ProductContext: Base64 image detected.'
+        );
 
-        /**
-         * Preserve the existing behavior of generating
-         * a temporary ID for non-Drive images.
+        /*
+         * إنشاء مجلد حقيقي باسم SKU.
+         */
+        const folderResult =
+          await createProductFolder(
+            productName,
+            sku
+          );
+
+        if (
+          !folderResult.success ||
+          !folderResult.folderId
+        ) {
+          console.error(
+            'ProductContext: failed to create product folder:',
+            folderResult
+          );
+
+          return false;
+        }
+
+        productFolderId =
+          folderResult.folderId;
+
+        const mimeType =
+          getMimeTypeFromDataUrl(
+            formattedImg
+          );
+
+        const fileName =
+          makeSafeImageFileName(
+            productName,
+            sku,
+            undefined,
+            mimeType
+          );
+
+        /*
+         * رفع الصورة إلى مجلد المنتج.
+         */
+        const uploadResult =
+          await uploadImageToDrive(
+            formattedImg,
+            fileName,
+            mimeType,
+            'product',
+            productFolderId
+          );
+
+        /*
+         * ممنوع الاستمرار بدون fileId حقيقي.
+         */
+        if (
+          !uploadResult.success ||
+          !uploadResult.fileId
+        ) {
+          console.error(
+            'ProductContext: image upload failed:',
+            uploadResult
+          );
+
+          return false;
+        }
+
+        driveId =
+          uploadResult.fileId;
+
+        formattedImg =
+          uploadResult.directUrl ||
+          uploadResult.viewUrl ||
+          uploadResult.driveUrl ||
+          formatGoogleDriveDirectUrl(
+            driveId
+          );
+
+        console.log(
+          'ProductContext: image uploaded:',
+          {
+            fileId: driveId,
+            folderId: productFolderId,
+            url: formattedImg
+          }
+        );
+      }
+
+      /* =====================================================
+         IMAGE: EXISTING GOOGLE DRIVE
+         ===================================================== */
+
+      else if (driveId) {
+        formattedImg =
+          formatGoogleDriveDirectUrl(
+            driveId
+          );
+
+        console.log(
+          'ProductContext: existing Drive image:',
+          driveId
+        );
+      }
+
+      /* =====================================================
+         IMAGE: EXTERNAL URL
+         ===================================================== */
+
+      else if (
+        typeof formattedImg ===
+          'string' &&
+        (
+          formattedImg.startsWith(
+            'http://'
+          ) ||
+          formattedImg.startsWith(
+            'https://'
+          )
+        )
+      ) {
+        /*
+         * رابط خارجي حقيقي.
+         * لا نضع drive_file_id.
          */
         driveId =
-          'drive_' +
-          Math.random()
-            .toString(36)
-            .substring(2, 9);
+          undefined;
       }
 
-      /**
-       * If the image is neither a Drive URL nor a normal
-       * URL, generate a Drive-style ID.
-       */
+      /* =====================================================
+         IMAGE: EMPTY
+         ===================================================== */
+
       else {
+        formattedImg = '';
         driveId =
-          generateDriveFileId();
-
-        formattedImg =
-          `https://lh3.googleusercontent.com/d/${driveId}`;
+          undefined;
       }
+
+      /* =====================================================
+         CREATE PRODUCT
+         ===================================================== */
 
       const newProduct: StoreProduct =
         {
@@ -806,72 +913,72 @@ export const ProductProvider: React.FC<{
 
           product_id: id,
 
+          sku,
+
           image:
             formattedImg,
 
-          drive_file_id:
-            driveId,
+          ...(driveId
+            ? {
+                drive_file_id:
+                  driveId
+              }
+            : {}),
 
           rating:
             productData.rating ||
             5.0
         };
 
-      /**
-       * Calculate the next state outside setState().
-       *
-       * NO localStorage operations happen inside
-       * the React state updater.
-       */
       const updatedProducts = [
         newProduct,
         ...productsRef.current
       ];
 
-      /**
-       * Update ref immediately.
-       */
       productsRef.current =
         updatedProducts;
 
-      /**
-       * Save lightweight cache.
-       *
-       * This can fail safely without crashing the app.
+      /*
+       * حفظ النسخة الخفيفة فقط.
        */
       saveProductsCache(
         updatedProducts
       );
 
-      /**
-       * Save lightweight image metadata.
+      /*
+       * حفظ بيانات الصورة فقط
+       * إذا كان لدينا fileId حقيقي.
        */
-      saveProductImageRecord(
-        id,
-        driveId || '',
-        formattedImg
-      );
+      if (
+        driveId
+      ) {
+        saveProductImageRecord(
+          id,
+          driveId,
+          formattedImg,
+          productFolderId
+        );
+      }
 
-      /**
-       * Update React state.
-       */
       setProducts(
         updatedProducts
       );
 
-      /**
-       * Trigger Google Sheets synchronization.
-       */
       dispatchProductChanged();
+
+      console.log(
+        'ProductContext: product added successfully:',
+        newProduct
+      );
+
+      return true;
     } catch (error) {
-      /**
-       * Product creation itself should not cause
-       * an uncaught exception / white screen.
-       */
       console.error(
         'حدث خطأ أثناء إضافة المنتج:',
         error
       );
+
+      return false;
     }
   };
 
@@ -879,17 +986,242 @@ export const ProductProvider: React.FC<{
      UPDATE PRODUCT
      ======================================================= */
 
-  const updateProduct = (
+  const updateProduct = async (
     id: string,
     updatedFields: Partial<StoreProduct>
-  ) => {
+  ): Promise<boolean> => {
     try {
       const currentProducts =
         productsRef.current;
 
-      let changedProduct:
-        | StoreProduct
-        | null = null;
+      const existingProduct =
+        currentProducts.find(
+          product =>
+            product.id === id ||
+            product.product_id === id
+        );
+
+      if (!existingProduct) {
+        console.warn(
+          `لم يتم العثور على المنتج المطلوب تحديثه: ${id}`
+        );
+
+        return false;
+      }
+
+      let formattedImg =
+        existingProduct.image || '';
+
+      let driveId:
+        | string
+        | undefined =
+        existingProduct.drive_file_id;
+
+      let productFolderId:
+        | string
+        | undefined;
+
+      /* =====================================================
+         IMAGE WAS CHANGED
+         ===================================================== */
+
+      if (
+        updatedFields.image !==
+        undefined
+      ) {
+        const newImage =
+          updatedFields.image || '';
+
+        /* ================================================
+           NEW BASE64 IMAGE
+           ================================================ */
+
+        if (
+          isBase64Image(
+            newImage
+          )
+        ) {
+          console.log(
+            'ProductContext: new Base64 image during update.'
+          );
+
+          const productName =
+            (
+              updatedFields.name ||
+              existingProduct.name ||
+              'منتج'
+            ).trim();
+
+          const sku =
+            (
+              updatedFields.sku ||
+              existingProduct.sku ||
+              `SKU-${Date.now()}`
+            ).trim();
+
+          /*
+           * ننشئ/نسترجع مجلد SKU الحقيقي.
+           *
+           * Apps Script مصمم بحيث لا ينشئ
+           * مجلدًا مكررًا إذا كان موجودًا.
+           */
+          const folderResult =
+            await createProductFolder(
+              productName,
+              sku
+            );
+
+          if (
+            !folderResult.success ||
+            !folderResult.folderId
+          ) {
+            console.error(
+              'ProductContext: failed to create/find product folder during update:',
+              folderResult
+            );
+
+            return false;
+          }
+
+          productFolderId =
+            folderResult.folderId;
+
+          const mimeType =
+            getMimeTypeFromDataUrl(
+              newImage
+            );
+
+          const fileName =
+            makeSafeImageFileName(
+              productName,
+              sku,
+              undefined,
+              mimeType
+            );
+
+          /*
+           * رفع الصورة الجديدة.
+           */
+          const uploadResult =
+            await uploadImageToDrive(
+              newImage,
+              fileName,
+              mimeType,
+              'product',
+              productFolderId
+            );
+
+          /*
+           * لا نعدل المنتج إذا فشل الرفع.
+           */
+          if (
+            !uploadResult.success ||
+            !uploadResult.fileId
+          ) {
+            console.error(
+              'ProductContext: update image upload failed:',
+              uploadResult
+            );
+
+            return false;
+          }
+
+          driveId =
+            uploadResult.fileId;
+
+          formattedImg =
+            uploadResult.directUrl ||
+            uploadResult.viewUrl ||
+            uploadResult.driveUrl ||
+            formatGoogleDriveDirectUrl(
+              driveId
+            );
+
+          console.log(
+            'ProductContext: updated image uploaded:',
+            {
+              fileId: driveId,
+              folderId:
+                productFolderId,
+              url: formattedImg
+            }
+          );
+        }
+
+        /* ================================================
+           EXISTING GOOGLE DRIVE IMAGE
+           ================================================ */
+
+        else {
+          const extracted =
+            extractGoogleDriveId(
+              newImage
+            );
+
+          if (extracted) {
+            driveId =
+              extracted;
+
+            formattedImg =
+              formatGoogleDriveDirectUrl(
+                extracted
+              );
+          }
+
+          /* ==============================================
+             EXTERNAL IMAGE
+             ============================================== */
+
+          else if (
+            newImage.startsWith(
+              'http://'
+            ) ||
+            newImage.startsWith(
+              'https://'
+            )
+          ) {
+            formattedImg =
+              newImage;
+
+            driveId =
+              undefined;
+          }
+
+          /* ==============================================
+             EMPTY IMAGE
+             ============================================== */
+
+          else {
+            formattedImg = '';
+            driveId =
+              undefined;
+          }
+        }
+      }
+
+      /* =====================================================
+         MERGE PRODUCT
+         ===================================================== */
+
+      const mergedProduct: StoreProduct =
+        {
+          ...existingProduct,
+
+          ...updatedFields,
+
+          image:
+            formattedImg,
+
+          ...(driveId
+            ? {
+                drive_file_id:
+                  driveId
+              }
+            : {
+                drive_file_id:
+                  undefined
+              })
+        };
 
       const updatedProducts =
         currentProducts.map(
@@ -901,113 +1233,52 @@ export const ProductProvider: React.FC<{
               return product;
             }
 
-            let formattedImg =
-              product.image;
-
-            let driveId =
-              product.drive_file_id;
-
-            /**
-             * Handle image change.
-             */
-            if (
-              updatedFields.image !==
-              undefined
-            ) {
-              formattedImg =
-                updatedFields.image;
-
-              const extracted =
-                extractGoogleDriveId(
-                  updatedFields.image
-                );
-
-              if (extracted) {
-                driveId =
-                  extracted;
-
-                formattedImg =
-                  `https://lh3.googleusercontent.com/d/${driveId}`;
-              }
-            }
-
-            const mergedProduct: StoreProduct =
-              {
-                ...product,
-                ...updatedFields,
-
-                image:
-                  formattedImg,
-
-                drive_file_id:
-                  driveId
-              };
-
-            changedProduct =
-              mergedProduct;
-
             return mergedProduct;
           }
         );
 
-      /**
-       * Nothing matched.
-       */
-      if (!changedProduct) {
-        console.warn(
-          `لم يتم العثور على المنتج المطلوب تحديثه: ${id}`
-        );
-
-        return;
-      }
-
-      /**
-       * Update synchronous ref.
-       */
       productsRef.current =
         updatedProducts;
 
-      /**
-       * Save lightweight cache.
-       */
       saveProductsCache(
         updatedProducts
       );
 
-      /**
-       * Update image metadata if relevant.
+      /*
+       * حفظ بيانات الصورة الجديدة
+       * فقط إذا كان fileId حقيقيًا.
        */
-      const productId =
-        changedProduct.product_id ||
-        changedProduct.id;
-
       if (
-        changedProduct.image
+        driveId
       ) {
         saveProductImageRecord(
-          productId,
-          changedProduct.drive_file_id ||
-            '',
-          changedProduct.image
+          mergedProduct.product_id ||
+            mergedProduct.id,
+          driveId,
+          formattedImg,
+          productFolderId
         );
       }
 
-      /**
-       * Update React state.
-       */
       setProducts(
         updatedProducts
       );
 
-      /**
-       * Notify synchronization layer.
-       */
       dispatchProductChanged();
+
+      console.log(
+        'ProductContext: product updated successfully:',
+        mergedProduct
+      );
+
+      return true;
     } catch (error) {
       console.error(
         'حدث خطأ أثناء تحديث المنتج:',
         error
       );
+
+      return false;
     }
   };
 
@@ -1055,9 +1326,6 @@ export const ProductProvider: React.FC<{
           }
         );
 
-      /**
-       * Check whether a product was actually updated.
-       */
       const changed =
         updatedProducts.some(
           (product, index) =>
@@ -1069,9 +1337,6 @@ export const ProductProvider: React.FC<{
         return;
       }
 
-      /**
-       * Notify low stock.
-       */
       if (
         lowStockProduct
       ) {
@@ -1082,29 +1347,17 @@ export const ProductProvider: React.FC<{
         );
       }
 
-      /**
-       * Update ref.
-       */
       productsRef.current =
         updatedProducts;
 
-      /**
-       * Save cache.
-       */
       saveProductsCache(
         updatedProducts
       );
 
-      /**
-       * Update state.
-       */
       setProducts(
         updatedProducts
       );
 
-      /**
-       * Trigger synchronization.
-       */
       dispatchProductChanged();
     } catch (error) {
       console.error(
@@ -1160,22 +1413,13 @@ export const ProductProvider: React.FC<{
           }
         );
 
-      /**
-       * Update ref.
-       */
       productsRef.current =
         updatedProducts;
 
-      /**
-       * Save lightweight cache.
-       */
       saveProductsCache(
         updatedProducts
       );
 
-      /**
-       * Update React state.
-       */
       setProducts(
         updatedProducts
       );
@@ -1185,9 +1429,6 @@ export const ProductProvider: React.FC<{
         updatedProducts
       );
 
-      /**
-       * Trigger synchronization.
-       */
       dispatchProductChanged();
     } catch (error) {
       console.error(
@@ -1215,9 +1456,6 @@ export const ProductProvider: React.FC<{
             product.product_id !== id
         );
 
-      /**
-       * Do nothing if product didn't exist.
-       */
       if (
         updatedProducts.length ===
         currentProducts.length
@@ -1229,24 +1467,13 @@ export const ProductProvider: React.FC<{
         return;
       }
 
-      /**
-       * Update ref.
-       */
       productsRef.current =
         updatedProducts;
 
-      /**
-       * Save lightweight cache.
-       */
       saveProductsCache(
         updatedProducts
       );
 
-      /**
-       * Remove product image metadata.
-       *
-       * This is optional cache data only.
-       */
       try {
         const existingImages =
           safeGetJSON<any[]>(
@@ -1263,7 +1490,7 @@ export const ProductProvider: React.FC<{
             existingImages.filter(
               image =>
                 image?.product_id !==
-                  id
+                id
             );
 
           try {
@@ -1274,23 +1501,17 @@ export const ProductProvider: React.FC<{
               )
             );
           } catch {
-            // Ignore cache failure.
+            // ignore
           }
         }
       } catch {
-        // Ignore.
+        // ignore
       }
 
-      /**
-       * Update state.
-       */
       setProducts(
         updatedProducts
       );
 
-      /**
-       * Notify synchronization layer.
-       */
       dispatchProductChanged();
     } catch (error) {
       console.error(

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { SmartPricingCalculator } from '../components/SmartPricingCalculator';
 import { GoogleDriveImageUploader } from '../components/GoogleDriveImageUploader';
-import { formatGoogleDriveDirectUrl, compressImageFile, extractGoogleDriveId } from '../../utils/googleDriveUtils';
+import { compressImageFile } from '../../utils/googleDriveUtils';
 import { SafeDriveImage } from '../../components/common/SafeDriveImage';
 
 export interface StagedProductItem {
@@ -92,7 +92,7 @@ export const ProductAndCategoryCustomizer: React.FC = () => {
     resetToDefaults 
   } = useCategories();
 
-  const { uploadImageToDrive, syncNow } = useGoogleSheets();
+  const { syncNow } = useGoogleSheets();
   const [stagedProducts, setStagedProducts] = useState<StagedProductItem[]>(() => {
     const saved = localStorage.getItem('elites_staged_products');
     if (saved) {
@@ -250,116 +250,291 @@ export const ProductAndCategoryCustomizer: React.FC = () => {
   };
 
   // Save to Staging Drafts or Direct Publish with Automatic Drive Upload
-  const handleSaveToStaging = async (e: React.FormEvent, publishDirectly = false) => {
+  const handleSaveToStaging = async (
+    e: React.FormEvent,
+    publishDirectly = false
+  ) => {
     e.preventDefault();
-    if (!prodName.trim()) return;
 
-    const primaryImage = images.find(img => img.is_primary) || images[0];
+    if (!prodName.trim()) {
+      triggerFeedback('يرجى إدخال اسم المنتج أولاً.');
+      return;
+    }
+
+    const primaryImage =
+      images.find(img => img.is_primary) || images[0];
+
     let finalImageUrl = primaryImage?.image_url || '';
 
+    // إذا كان نشرًا مباشرًا وهناك ملف صورة معلق، نقوم بضغطه وتحويله لـ Base64
+    // لكي يتعرف عليه addProduct/updateProduct ويرفعه تلقائيًا
     if (publishDirectly && pendingImageFile) {
       try {
-        triggerFeedback('جاري ضغط الصورة والرفع التلقائي إلى Google Drive...');
-        const { base64 } = await compressImageFile(pendingImageFile, 1200, 0.85);
-        const res = await uploadImageToDrive(base64, pendingImageFile.name, pendingImageFile.type);
-        if (res && res.driveUrl) {
-          finalImageUrl = res.driveUrl;
-        }
-      } catch (err) {
-        console.error('Auto upload to drive failed:', err);
+        triggerFeedback('جاري تجهيز وضغط الصورة للرفع السحابي...');
+        const { base64 } = await compressImageFile(
+          pendingImageFile,
+          1200,
+          0.85
+        );
+        finalImageUrl = base64;
+      } catch (imageError) {
+        console.error('Failed to prepare direct upload image:', imageError);
+        triggerFeedback('❌ فشل تجهيز الصورة للرفع.');
+        return;
       }
     }
 
-    const autoSku = editingProduct?.sku || ('AFF-' + Math.floor(1000 + Math.random() * 9000));
+    const autoSku =
+      editingProduct?.sku ||
+      ('AFF-' + Math.floor(1000 + Math.random() * 9000));
 
     const productPayload = {
-      name: prodName,
-      description: prodDescription,
+      name: prodName.trim(),
+      description: prodDescription.trim(),
       category: prodCategory,
       sku: autoSku,
       cost_price: Number(costPrice),
       price: Number(sellingPrice),
       originalPrice: Number(compareAtPrice),
       stock: Number(stockQuantity),
-      image: finalImageUrl || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600',
+
+      // الصورة الحقيقية يمكن أن تكون Base64 مؤقتًا هنا،
+      // لكن لن نضعها داخل localStorage في وضع المعاينة.
+      image:
+        finalImageUrl ||
+        'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600',
+
       featured: isFeatured,
       bestSeller: isBestSeller,
-      newProduct: isNewArrival
+      newProduct: isNewArrival,
+
+      fulfillment_method: 'OWN_STOCK' as const
     };
 
     if (publishDirectly) {
-      if (editingProduct) {
-        updateProduct(editingProduct.id, productPayload);
-        triggerFeedback(`تم تعديل ونشر المنتج "${prodName}" فوراً بنجاح!`);
-      } else {
-        addProduct({
-          ...productPayload,
-          supplier: 'المورد الرئيسي',
-          fulfillmentType: 'internal'
-        });
-        triggerFeedback(`تمت إضافة ونشر المنتج "${prodName}" فوراً بنجاح!`);
+      try {
+        triggerFeedback(
+          editingProduct
+            ? 'جاري حفظ تعديلات المنتج ورفع الصورة إلى Google Drive...'
+            : 'جاري إنشاء مجلد المنتج ورفع الصورة إلى Google Drive...'
+        );
+
+        if (editingProduct) {
+          const success = await updateProduct(editingProduct.id, productPayload);
+
+          if (!success) {
+            triggerFeedback(
+              '❌ فشل تحديث المنتج. لم يتم النشر لأن رفع الصورة أو إنشاء مجلد المنتج فشل.'
+            );
+            return;
+          }
+
+          try {
+            await syncNow();
+          } catch (syncError) {
+            console.error('Sync after product update failed:', syncError);
+          }
+
+          triggerFeedback(
+            `تم تعديل ونشر المنتج "${prodName}" بنجاح!`
+          );
+        } else {
+          const success = await addProduct({
+            ...productPayload,
+            supplier: 'المورد الرئيسي',
+            fulfillmentType: 'internal'
+          });
+
+          if (!success) {
+            triggerFeedback(
+              '❌ فشل إضافة المنتج. لم يتم نشره لأن رفع الصورة أو إنشاء مجلد المنتج فشل.'
+            );
+            return;
+          }
+
+          try {
+            await syncNow();
+          } catch (syncError) {
+            console.error('Sync after product creation failed:', syncError);
+          }
+
+          triggerFeedback(
+            `🚀 تمت إضافة ونشر المنتج "${prodName}" بنجاح!`
+          );
+        }
+
+        setPendingImageFile(null);
+        setIsProductEditorOpen(false);
+
+      } catch (error) {
+        console.error('Direct product publish error:', error);
+
+        triggerFeedback(
+          '❌ حدث خطأ أثناء نشر المنتج. لم يتم تأكيد نجاح العملية.'
+        );
       }
-      try { syncNow(); } catch (e) {}
-    } else {
-      const stagingId = 'stg_' + Date.now();
-      const newItem: StagedProductItem = {
-        stagingId,
-        action: editingProduct ? 'update' : 'add',
-        originalId: editingProduct ? editingProduct.id : undefined,
-        productData: productPayload,
-        pendingFile: pendingImageFile,
-        timestamp: Date.now()
-      };
-      setStagedProducts(prev => [...prev.filter(p => p.originalId !== editingProduct?.id), newItem]);
-      triggerFeedback(`تم حفظ المنتج "${prodName}" في بروفا المعاينة بنجاح! انتقل لتبويب 'بروفا المعاينة' لمراجعته.`);
+
+      return;
     }
+
+    // حفظ في بروفا المعاينة فقط
+    const stagingId = 'stg_' + Date.now();
+
+    const stagingImage =
+      finalImageUrl &&
+      finalImageUrl.startsWith('data:image/')
+        ? ''
+        : finalImageUrl;
+
+    const newItem: StagedProductItem = {
+      stagingId,
+      action: editingProduct ? 'update' : 'add',
+      originalId: editingProduct ? editingProduct.id : undefined,
+
+      productData: {
+        ...productPayload,
+        image: stagingImage
+      },
+
+      // يبقى الملف في الذاكرة أثناء الجلسة فقط.
+      // لا يتم وضعه داخل localStorage.
+      pendingFile: pendingImageFile,
+
+      timestamp: Date.now()
+    };
+
+    setStagedProducts(prev => [
+      ...prev.filter(
+        p => p.originalId !== editingProduct?.id
+      ),
+      newItem
+    ]);
 
     setPendingImageFile(null);
     setIsProductEditorOpen(false);
+
+    triggerFeedback(
+      `تم حفظ المنتج "${prodName}" في بروفا المعاينة بنجاح!`
+    );
   };
 
   const publishAllStaged = async () => {
     if (stagedProducts.length === 0) return;
+
     setIsPublishing(true);
-    triggerFeedback('جاري رفع الصور إلى Google Drive ونشر جميع المنتجات والتعديلات المعلقة...');
+
+    triggerFeedback(
+      'جاري نشر المنتجات المعلقة ورفع صورها إلى Google Drive...'
+    );
 
     try {
       for (const item of stagedProducts) {
-        let finalImg = item.productData.image;
+
+        let finalImage = item.productData.image;
+
+        /*
+         * إذا كانت هناك صورة معلقة من الجهاز،
+         * نحولها إلى Base64 ونمررها إلى addProduct.
+         *
+         * addProduct هو المسؤول عن:
+         * 1. إنشاء مجلد المنتج.
+         * 2. رفع الصورة إلى Google Drive.
+         * 3. حفظ رابط الصورة الحقيقي.
+         */
         if (item.pendingFile) {
           try {
-            const { base64 } = await compressImageFile(item.pendingFile, 1200, 0.85);
-            const res = await uploadImageToDrive(base64, item.pendingFile.name, item.pendingFile.type);
-            if (res && res.driveUrl) {
-              finalImg = res.driveUrl;
-            }
-          } catch (e) {
-            console.error('Batch upload error:', e);
+            const { base64 } = await compressImageFile(
+              item.pendingFile,
+              1200,
+              0.85
+            );
+
+            finalImage = base64;
+          } catch (imageError) {
+            console.error(
+              'Failed to prepare staged image:',
+              imageError
+            );
+
+            throw new Error(
+              `فشل تجهيز صورة المنتج "${item.productData.name}"`
+            );
           }
         }
 
-        const dataToSave = { ...item.productData, image: finalImg };
+        const dataToSave = {
+          ...item.productData,
+          image: finalImage
+        };
 
         if (item.action === 'add') {
-          addProduct({
+
+          const success = await addProduct({
             ...dataToSave,
             supplier: 'المورد الرئيسي',
             fulfillmentType: 'internal'
           });
-        } else if (item.action === 'update' && item.originalId) {
-          updateProduct(item.originalId, dataToSave);
+
+          if (!success) {
+            throw new Error(
+              `فشل نشر المنتج "${item.productData.name}"`
+            );
+          }
+
+        } else if (
+          item.action === 'update' &&
+          item.originalId
+        ) {
+
+          const success = await updateProduct(
+            item.originalId,
+            dataToSave
+          );
+
+          if (!success) {
+            throw new Error(
+              `فشل تعديل ونشر المنتج "${item.productData.name}"`
+            );
+          }
         }
       }
 
-      setStagedProducts([]);
-      localStorage.removeItem('elites_staged_products');
-      try { await syncNow(); } catch (e) {}
+      /*
+       * تتم مزامنة البيانات بعد نجاح جميع العمليات.
+       */
+      try {
+        await syncNow();
+      } catch (syncError) {
+        console.error(
+          'Batch sync failed:',
+          syncError
+        );
+      }
 
-      triggerFeedback('🚀 تم نشر جميع المنتجات والتعديلات دفعة واحدة إلى المتجر وجداول Google Sheets بنجاح!');
+      setStagedProducts([]);
+      localStorage.removeItem(
+        'elites_staged_products'
+      );
+
+      triggerFeedback(
+        '🚀 تم نشر جميع المنتجات والتعديلات بنجاح إلى المتجر وGoogle Sheets!'
+      );
+
       setActiveTab('products');
-    } catch (err) {
-      console.error('Publish error:', err);
-      triggerFeedback('حدث خطأ أثناء النشر الشامل، يرجى المحاولة مرة أخرى.');
+
+    } catch (error) {
+
+      console.error(
+        'Publish staged products error:',
+        error
+      );
+
+      triggerFeedback(
+        error instanceof Error
+          ? `❌ ${error.message}`
+          : '❌ حدث خطأ أثناء النشر الشامل.'
+      );
+
     } finally {
       setIsPublishing(false);
     }

@@ -69,8 +69,8 @@ export default function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
-        <ProductProvider>
-          <GoogleSheetsProvider>
+        <GoogleSheetsProvider>
+          <ProductProvider>
             <OrderProvider>
               <AccountingProvider>
                 <WishlistProvider>
@@ -86,8 +86,8 @@ export default function App() {
                 </WishlistProvider>
               </AccountingProvider>
             </OrderProvider>
-          </GoogleSheetsProvider>
-        </ProductProvider>
+          </ProductProvider>
+        </GoogleSheetsProvider>
       </NotificationProvider>
     </AuthProvider>
   );

@@ -176,7 +176,21 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const rawCategories = JSON.parse(localStorage.getItem('elites_categories') || '[]');
       const categories = (Array.isArray(rawCategories) && rawCategories.length > 0) ? rawCategories : DEFAULT_CATEGORIES;
 
-      const rawProducts = JSON.parse(localStorage.getItem('elites_products') || localStorage.getItem('elites_store_products') || '[]');
+      const rawProducts = (() => {
+  try {
+    const raw = localStorage.getItem('elites_store_products');
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn(
+      'تعذر قراءة المنتجات من LocalStorage أثناء المزامنة:',
+      error
+    );
+    return [];
+  }
+})();
       const normalizedProducts = rawProducts.map((p: any, idx: number) => {
         const prodId = p.product_id || p.id || ('prod_' + (idx + 1));
         
@@ -544,9 +558,47 @@ export const GoogleSheetsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         if (data && data.tables) {
           // Update local cache from Google Sheets authoritative data
           if (data.tables.products) {
-            localStorage.setItem('elites_products', JSON.stringify(data.tables.products));
-            localStorage.setItem('elites_store_products', JSON.stringify(data.tables.products));
-          }
+  try {
+    const products = Array.isArray(data.tables.products)
+      ? data.tables.products
+      : [];
+
+    /*
+     * نخزن نسخة خفيفة فقط.
+     * لا نخزن image_data أو الصور Base64.
+     */
+    const lightweightProducts = products.map((product: any) => {
+      const {
+        image_data: _imageData,
+        images: _images,
+        ...rest
+      } = product;
+
+      return rest;
+    });
+
+    localStorage.setItem(
+      'elites_store_products',
+      JSON.stringify(lightweightProducts)
+    );
+
+    /*
+     * حذف النسخة القديمة إن وجدت.
+     */
+    try {
+      localStorage.removeItem(
+        'elites_products'
+      );
+    } catch {
+      // ignore
+    }
+  } catch (error) {
+    console.warn(
+      'تعذر تحديث Cache المنتجات من Google Sheets:',
+      error
+    );
+  }
+}
           if (data.tables.suppliers) {
             localStorage.setItem('elites_suppliers', JSON.stringify(data.tables.suppliers));
           }

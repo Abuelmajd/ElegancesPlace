@@ -1300,8 +1300,8 @@ export const GoogleSheetsProvider:
             }
 
             if (
-              result.status !==
-              "success"
+              result.success === false ||
+              result.status === "error"
             ) {
               return {
                 success:
@@ -1574,8 +1574,8 @@ export const GoogleSheetsProvider:
             }
 
             if (
-              result.status !==
-              "success"
+              result.success === false ||
+              result.status === "error"
             ) {
               return {
                 success: false,

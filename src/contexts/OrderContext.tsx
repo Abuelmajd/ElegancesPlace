@@ -194,6 +194,8 @@ const INITIAL_ORDERS: Order[] = [
 // Initial Order Items
 const INITIAL_ORDER_ITEMS: OrderItem[] = [
   {
+    id: 'item_101_1',
+    item_id: 'item_101_1',
     order_item_id: 'item_101_1',
     order_id: 'ord_101',
     product_id: 'p1',
@@ -203,14 +205,28 @@ const INITIAL_ORDER_ITEMS: OrderItem[] = [
     product_name: 'عطر العود الملكي الفاخر',
     supplier_id_at_purchase: 'sup_1',
     supplier_name_at_purchase: 'مورد العطور المميزة',
+    cost_price: 120,
+    cost_currency: 'ILS',
+    cost_price_base: 120,
+    cost_exchange_rate: 1,
+    selling_price: 180,
+    selling_currency: 'ILS',
+    selling_price_base: 180,
+    selling_exchange_rate: 1,
+    quantity: 1,
+    profit: 60,
+    profit_currency: 'ILS',
+    profit_base: 60,
+    fulfillment_method: 'OWN_STOCK',
+    fulfillment_method_at_purchase: 'OWN_STOCK',
+    created_at: '2026-08-20T10:00:00Z',
     cost_price_at_purchase: 120,
     selling_price_at_purchase: 180,
-    quantity: 1,
-    subtotal: 180,
-    profit: 60,
-    fulfillment_method_at_purchase: 'OWN_STOCK'
+    subtotal: 180
   },
   {
+    id: 'item_102_1',
+    item_id: 'item_102_1',
     order_item_id: 'item_102_1',
     order_id: 'ord_102',
     product_id: 'p2',
@@ -220,14 +236,28 @@ const INITIAL_ORDER_ITEMS: OrderItem[] = [
     product_name: 'ساعة يد كلاسيكية أنيقة',
     supplier_id_at_purchase: 'sup_2',
     supplier_name_at_purchase: 'مورد الساعات العالمية',
+    cost_price: 210,
+    cost_currency: 'ILS',
+    cost_price_base: 210,
+    cost_exchange_rate: 1,
+    selling_price: 320,
+    selling_currency: 'ILS',
+    selling_price_base: 320,
+    selling_exchange_rate: 1,
+    quantity: 1,
+    profit: 110,
+    profit_currency: 'ILS',
+    profit_base: 110,
+    fulfillment_method: 'OWN_STOCK',
+    fulfillment_method_at_purchase: 'OWN_STOCK',
+    created_at: '2026-08-22T10:00:00Z',
     cost_price_at_purchase: 210,
     selling_price_at_purchase: 320,
-    quantity: 1,
-    subtotal: 320,
-    profit: 110,
-    fulfillment_method_at_purchase: 'OWN_STOCK'
+    subtotal: 320
   },
   {
+    id: 'item_103_1',
+    item_id: 'item_103_1',
     order_item_id: 'item_103_1',
     order_id: 'ord_103',
     product_id: 'p3',
@@ -237,12 +267,24 @@ const INITIAL_ORDER_ITEMS: OrderItem[] = [
     product_name: 'حقيبة جلد طبيعي فاخرة',
     supplier_id_at_purchase: 'sup_3',
     supplier_name_at_purchase: 'مورد الجلديات الفاخرة',
+    cost_price: 160,
+    cost_currency: 'ILS',
+    cost_price_base: 160,
+    cost_exchange_rate: 1,
+    selling_price: 250,
+    selling_currency: 'ILS',
+    selling_price_base: 250,
+    selling_exchange_rate: 1,
+    quantity: 1,
+    profit: 90,
+    profit_currency: 'ILS',
+    profit_base: 90,
+    fulfillment_method: 'SUPPLIER_DROPSHIPPING',
+    fulfillment_method_at_purchase: 'SUPPLIER_DROPSHIPPING',
+    created_at: '2026-08-25T10:00:00Z',
     cost_price_at_purchase: 160,
     selling_price_at_purchase: 250,
-    quantity: 1,
-    subtotal: 250,
-    profit: 90,
-    fulfillment_method_at_purchase: 'SUPPLIER_DROPSHIPPING'
+    subtotal: 250
   }
 ];
 
@@ -349,6 +391,7 @@ const INITIAL_INVENTORY_MOVEMENTS: InventoryMovement[] = [
     date: '2026-08-20',
     time: '14:30:00',
     timestamp: '2026-08-20 14:30:00',
+    created_at: '2026-08-20T14:30:00Z',
     notes: 'بيع من المخزون الخاص بالطلب ord_101'
   },
   {
@@ -363,6 +406,7 @@ const INITIAL_INVENTORY_MOVEMENTS: InventoryMovement[] = [
     date: '2026-08-22',
     time: '18:15:00',
     timestamp: '2026-08-22 18:15:00',
+    created_at: '2026-08-22T18:15:00Z',
     notes: 'بيع من المخزون الخاص بالطلب ord_102'
   }
 ];
@@ -614,6 +658,8 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
 
       const orderItem: OrderItem = {
+        id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        item_id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         order_item_id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         order_id: orderId,
         product_id: prod.product_id || prod.id,
@@ -623,13 +669,25 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         product_name: prod.name,
         supplier_id_at_purchase: prod.supplier_id || supplierInfo.supplier_id || 'sup_1',
         supplier_name_at_purchase: supplierInfo.company_name || prod.supplier || 'المورد',
+        cost_price: cPrice,
+        cost_currency: 'ILS',
+        cost_price_base: cPrice,
+        cost_exchange_rate: 1,
+        selling_price: sPrice,
+        selling_currency: 'ILS',
+        selling_price_base: sPrice,
+        selling_exchange_rate: 1,
+        quantity: item.quantity,
+        profit: profit,
+        profit_currency: 'ILS',
+        profit_base: profit,
+        fulfillment_method: fMethod as ProductFulfillmentMethod,
+        created_at: new Date().toISOString(),
         cost_price_at_purchase: cPrice,
         selling_price_at_purchase: sPrice,
-        quantity: item.quantity,
+        fulfillment_method_at_purchase: fMethod as string,
         discount_at_purchase: discount,
-        subtotal: itemSubtotal,
-        profit: profit,
-        fulfillment_method_at_purchase: fMethod as ProductFulfillmentMethod
+        subtotal: itemSubtotal
       };
 
       items.push(orderItem);
@@ -651,6 +709,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           date: dateStr,
           time: timeStr,
           timestamp: `${dateStr} ${timeStr}`,
+          created_at: new Date().toISOString(),
           notes: `خصم بيع مخزون محلي للطلب ${orderNum}`
         };
         movements.push(movement);

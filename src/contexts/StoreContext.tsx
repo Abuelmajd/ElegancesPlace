@@ -271,7 +271,7 @@ const DEFAULT_PRODUCT_GUARANTEES: ProductGuaranteesConfig = {
   ]
 };
 
-const DEFAULT_STORE_SETTINGS: StoreSettings = {
+const DEFAULT_STORE_SETTINGS = {
   store_name: 'متجر النخبة',
   store_slogan: 'الفخامة والجودة بين يديك',
   store_mode: 'AFFILIATE_BROKER',
@@ -313,7 +313,7 @@ const DEFAULT_STORE_SETTINGS: StoreSettings = {
     meta_description: 'تصفح واشترِ أحدث العطور والأجهزة والساعات والملابس بأفضل الأسعار مع خدمات الدفع عند الاستلام والتوصيل السريع.',
     keywords: 'متجر النخبة, تسوق اونلاين, عطور, ساعات, فلسطين, توصيل سريع'
   }
-};
+} as unknown as StoreSettings;
 
 interface StoreContextType {
   // Theme & Appearance (Published vs Draft)

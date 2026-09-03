@@ -580,10 +580,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
       setSuccessMsg('تم تعديل وتحديث بيانات المنتج وسعر الجملة وهامش الربح بنجاح!');
     } else {
       addProduct({
+        product_id: `prod_${Date.now()}`,
+        sku: `SKU-${Date.now()}`,
+        status: 'active',
         name: prodName,
-        price: finalPrice,
-        oldPrice: Number(prodOldPrice) || undefined,
-        costPrice: wholesale,
+        selling_price: finalPrice,
+        cost_price: wholesale,
+        old_price: Number(prodOldPrice) || undefined,
         category: prodCategory,
         image: prodImage,
         drive_file_id: prodDriveFileId || undefined,

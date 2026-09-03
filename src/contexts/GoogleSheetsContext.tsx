@@ -33,7 +33,7 @@ interface CreateProductFolderResult {
   error?: string;
 }
 
-interface UploadImageResult {
+interface UploadMediaResult {
   success: boolean;
   fileId?: string;
   fileName?: string;
@@ -43,6 +43,30 @@ interface UploadImageResult {
   mimeType?: string;
   folderId?: string;
   folderUrl?: string;
+  mediaType?: "image" | "video";
+  error?: string;
+}
+
+type UploadImageResult = UploadMediaResult;
+
+interface FolderMediaFile {
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  mediaType: "image" | "video";
+  fileType?: "image" | "video";
+  driveUrl?: string;
+  viewUrl?: string;
+  directUrl?: string;
+}
+
+interface FetchFolderMediaResult {
+  success: boolean;
+  folderId?: string;
+  folderName?: string;
+  files: FolderMediaFile[];
+  media: FolderMediaFile[];
+  images: FolderMediaFile[];
   error?: string;
 }
 
@@ -76,9 +100,25 @@ interface GoogleSheetsContextType {
     folderId?: string
   ) => Promise<UploadImageResult>;
 
+  uploadMediaToDrive: (
+    base64Data: string,
+    fileName: string,
+    mimeType: string,
+    targetType?: string,
+    folderId?: string
+  ) => Promise<UploadMediaResult>;
+
+  fetchFolderMedia: (
+    folderId: string
+  ) => Promise<FetchFolderMediaResult>;
+
+  /*
+   * Wrapper قديم للتوافق مع المكونات القديمة.
+   * يعيد الصور فقط.
+   */
   fetchFolderImages: (
     folderId: string
-  ) => Promise<any[]>;
+  ) => Promise<FolderMediaFile[]>;
 
   triggerSync: () => void;
 }
@@ -251,9 +291,8 @@ function cleanObjectForStorage(
      * Never store Base64 images or Blob URLs.
      */
     if (
-      value.startsWith(
-        "data:image/"
-      ) ||
+      value.startsWith("data:image/") ||
+      value.startsWith("data:video/") ||
       value.startsWith("blob:")
     ) {
       return "";
@@ -319,16 +358,15 @@ function cleanObjectForStorage(
          * must never enter cache.
          */
         if (
-          lowerKey ===
-            "image_data" ||
-          lowerKey ===
-            "imagedata" ||
-          lowerKey ===
-            "base64" ||
-          lowerKey ===
-            "preview" ||
-          lowerKey ===
-            "blob"
+          lowerKey === "image_data" ||
+          lowerKey === "imagedata" ||
+          lowerKey === "video_data" ||
+          lowerKey === "videodata" ||
+          lowerKey === "media_data" ||
+          lowerKey === "mediadata" ||
+          lowerKey === "base64" ||
+          lowerKey === "preview" ||
+          lowerKey === "blob"
         ) {
           return;
         }
@@ -1392,30 +1430,110 @@ export const GoogleSheetsProvider:
       );
 
     /* ========================================================
-       FETCH FOLDER IMAGES
+       UPLOAD MEDIA TO DRIVE
        ======================================================== */
 
-    const fetchFolderImages =
+    const uploadMediaToDrive =
       useCallback(
         async (
-          folderId: string
-        ): Promise<
-          any[]
-        > => {
+          base64Data: string,
+          fileName: string,
+          mimeType: string,
+          targetType = "product",
+          folderId?: string
+        ): Promise<UploadMediaResult> => {
           try {
-            if (
-              !folderId ||
-              !config.webhookUrl
-            ) {
-              return [];
+            if (!config.webhookUrl) {
+              return {
+                success: false,
+                error:
+                  "رابط Google Apps Script غير موجود.",
+              };
             }
+
+            if (!base64Data) {
+              return {
+                success: false,
+                error:
+                  "بيانات الملف فارغة.",
+              };
+            }
+
+            if (
+              !base64Data.startsWith(
+                "data:"
+              )
+            ) {
+              return {
+                success: false,
+                error:
+                  "بيانات الملف ليست Data URL صالحة.",
+              };
+            }
+
+            if (
+              !mimeType.startsWith("image/") &&
+              !mimeType.startsWith("video/")
+            ) {
+              return {
+                success: false,
+                error:
+                  "نوع الملف غير مدعوم. يسمح فقط بالصور والفيديو.",
+              };
+            }
+
+            const mediaType =
+              mimeType.startsWith("video/")
+                ? "video"
+                : "image";
+
+            const payload: Record<
+              string,
+              unknown
+            > = {
+              action:
+                "upload_media_to_drive",
+
+              base64Data,
+
+              fileName:
+                fileName ||
+                (
+                  mediaType === "video"
+                    ? "product-video.mp4"
+                    : "product-image.jpg"
+                ),
+
+              mimeType,
+
+              targetType:
+                targetType || "product",
+
+              mediaType,
+            };
+
+            if (folderId) {
+              payload.folderId =
+                folderId;
+            }
+
+            console.log(
+              "Uploading media to Google Drive:",
+              {
+                fileName,
+                mimeType,
+                mediaType,
+                folderId,
+                base64Length:
+                  base64Data.length,
+              }
+            );
 
             const response =
               await fetch(
                 config.webhookUrl,
                 {
-                  method:
-                    "POST",
+                  method: "POST",
 
                   headers: {
                     "Content-Type":
@@ -1423,18 +1541,13 @@ export const GoogleSheetsProvider:
                   },
 
                   body:
-                    JSON.stringify({
-                      action:
-                        "fetch_folder_images",
-
-                      folderId,
-                    }),
+                    JSON.stringify(
+                      payload
+                    ),
                 }
               );
 
-            if (
-              !response.ok
-            ) {
+            if (!response.ok) {
               throw new Error(
                 `HTTP ${response.status}`
               );
@@ -1443,58 +1556,417 @@ export const GoogleSheetsProvider:
             const text =
               await response.text();
 
-            if (
-              !text
-            ) {
-              return [];
+            if (!text) {
+              throw new Error(
+                "Google Apps Script أعاد استجابة فارغة."
+              );
             }
 
-            let result:
-              any;
+            let result: any;
 
             try {
               result =
-                JSON.parse(
-                  text
-                );
+                JSON.parse(text);
             } catch {
-              console.error(
-                "Invalid fetchFolderImages response:",
-                text
+              throw new Error(
+                "استجابة Google Apps Script ليست JSON صحيحة."
               );
-
-              return [];
             }
 
             if (
               result.status !==
               "success"
             ) {
-              console.error(
-                "fetchFolderImages failed:",
-                result
-              );
-
-              return [];
+              return {
+                success: false,
+                error:
+                  result.message ||
+                  result.error ||
+                  "فشل رفع الملف إلى Google Drive.",
+              };
             }
 
-            return Array.isArray(
-              result.files
-            )
-              ? result.files
-              : [];
+            const fileId =
+              result.fileId ||
+              extractGoogleDriveId(
+                result.directUrl ||
+                  result.viewUrl ||
+                  result.driveUrl ||
+                  result.url ||
+                  ""
+              );
+
+            if (!fileId) {
+              return {
+                success: false,
+                error:
+                  "لم يُرجع Google Drive fileId حقيقيًا.",
+              };
+            }
+
+            const directUrl =
+              result.directUrl ||
+              (
+                mediaType === "image"
+                  ? formatGoogleDriveDirectUrl(
+                      fileId
+                    )
+                  : result.viewUrl ||
+                    `https://drive.google.com/file/d/${fileId}/view`
+              );
+
+            const viewUrl =
+              result.viewUrl ||
+              `https://drive.google.com/uc?export=view&id=${fileId}`;
+
+            const driveUrl =
+              result.driveUrl ||
+              `https://drive.google.com/file/d/${fileId}/view`;
+
+            /*
+             * Cache للصور فقط.
+             *
+             * لا نخزن فيديوهات Base64 في sessionStorage.
+             */
+            if (
+              mediaType === "image"
+            ) {
+              try {
+                cacheDriveImagePreview(
+                  fileId,
+                  base64Data
+                );
+              } catch (
+                cacheError
+              ) {
+                console.warn(
+                  "تعذر حفظ معاينة الصورة مؤقتًا:",
+                  cacheError
+                );
+              }
+            }
+
+            return {
+              success: true,
+
+              fileId,
+
+              fileName:
+                result.fileName ||
+                fileName,
+
+              driveUrl,
+
+              directUrl,
+
+              viewUrl,
+
+              mimeType:
+                result.mimeType ||
+                mimeType,
+
+              folderId:
+                result.folderId ||
+                folderId,
+
+              folderUrl:
+                result.folderUrl,
+
+              mediaType,
+            };
+          } catch (error) {
+            console.error(
+              "uploadMediaToDrive error:",
+              error
+            );
+
+            return {
+              success: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : String(error),
+            };
+          }
+        },
+        [config.webhookUrl]
+      );
+
+    /* ========================================================
+       FETCH FOLDER MEDIA
+       ======================================================== */
+
+    const fetchFolderMedia =
+      useCallback(
+        async (
+          folderId: string
+        ): Promise<FetchFolderMediaResult> => {
+          const emptyResult: FetchFolderMediaResult = {
+            success: false,
+            folderId,
+            files: [],
+            media: [],
+            images: [],
+          };
+
+          try {
+            if (!folderId) {
+              return {
+                ...emptyResult,
+                error:
+                  "معرف مجلد Google Drive غير موجود.",
+              };
+            }
+
+            if (!config.webhookUrl) {
+              return {
+                ...emptyResult,
+                error:
+                  "رابط Google Apps Script غير موجود.",
+              };
+            }
+
+            const response =
+              await fetch(
+                config.webhookUrl,
+                {
+                  method: "POST",
+
+                  headers: {
+                    "Content-Type":
+                      "text/plain;charset=utf-8",
+                  },
+
+                  body: JSON.stringify({
+                    action:
+                      "fetch_folder_media",
+
+                    folderId,
+                  }),
+                }
+              );
+
+            if (!response.ok) {
+              throw new Error(
+                `HTTP ${response.status}`
+              );
+            }
+
+            const text =
+              await response.text();
+
+            if (!text) {
+              throw new Error(
+                "Google Apps Script أعاد استجابة فارغة."
+              );
+            }
+
+            let result: any;
+
+            try {
+              result =
+                JSON.parse(text);
+            } catch {
+              console.error(
+                "Invalid fetchFolderMedia response:",
+                text
+              );
+
+              throw new Error(
+                "استجابة Google Apps Script ليست JSON صحيحة."
+              );
+            }
+
+            if (
+              result.success === false ||
+              result.status === "error"
+            ) {
+              throw new Error(
+                result.message ||
+                  result.error ||
+                  "فشل جلب وسائط مجلد Google Drive."
+              );
+            }
+
+            /*
+             * Apps Script V3 يعيد:
+             *
+             * files
+             * media
+             * images
+             *
+             * نستخدم files كمصدر رئيسي.
+             */
+            const rawFiles =
+              Array.isArray(result.files)
+                ? result.files
+                : Array.isArray(result.media)
+                ? result.media
+                : [];
+
+            const files: FolderMediaFile[] =
+              rawFiles
+                .map(
+                  (
+                    file: any
+                  ): FolderMediaFile | null => {
+                    if (!file) {
+                      return null;
+                    }
+
+                    const mimeType =
+                      String(
+                        file.mimeType ||
+                          ""
+                      );
+
+                    const mediaType =
+                      file.mediaType ===
+                        "video" ||
+                      mimeType.startsWith(
+                        "video/"
+                      )
+                        ? "video"
+                        : "image";
+
+                    const fileId =
+                      String(
+                        file.fileId ||
+                          file.id ||
+                          ""
+                      );
+
+                    if (!fileId) {
+                      return null;
+                    }
+
+                    return {
+                      fileId,
+
+                      fileName:
+                        String(
+                          file.fileName ||
+                            file.name ||
+                            "media"
+                        ),
+
+                      mimeType,
+
+                      mediaType,
+
+                      fileType:
+                        mediaType,
+
+                      driveUrl:
+                        file.driveUrl,
+
+                      viewUrl:
+                        file.viewUrl,
+
+                      directUrl:
+                        file.directUrl,
+                    };
+                  }
+                )
+                .filter(
+                  (
+                    file
+                  ): file is FolderMediaFile =>
+                    file !== null
+                );
+
+            const images =
+              files.filter(
+                (file) =>
+                  file.mediaType ===
+                  "image"
+              );
+
+            console.log(
+              "Google Drive folder media loaded:",
+              {
+                folderId:
+                  result.folderId ||
+                  folderId,
+
+                folderName:
+                  result.folderName,
+
+                total:
+                  files.length,
+
+                images:
+                  images.length,
+
+                videos:
+                  files.filter(
+                    (file) =>
+                      file.mediaType ===
+                      "video"
+                  ).length,
+              }
+            );
+
+            return {
+              success: true,
+
+              folderId:
+                result.folderId ||
+                folderId,
+
+              folderName:
+                result.folderName,
+
+              files,
+
+              media: files,
+
+              images,
+            };
           } catch (
             error
           ) {
             console.error(
-              "fetchFolderImages error:",
+              "fetchFolderMedia error:",
               error
             );
 
-            return [];
+            return {
+              ...emptyResult,
+
+              error:
+                error instanceof Error
+                  ? error.message
+                  : String(error),
+            };
           }
         },
         [config.webhookUrl]
+      );
+
+    /* ========================================================
+       FETCH FOLDER IMAGES — LEGACY COMPATIBILITY
+       ======================================================== */
+
+    const fetchFolderImages =
+      useCallback(
+        async (
+          folderId: string
+        ): Promise<FolderMediaFile[]> => {
+          const result =
+            await fetchFolderMedia(
+              folderId
+            );
+
+          /*
+           * هذه الدالة القديمة تعيد الصور فقط.
+           *
+           * أي مكون قديم ما زال يستخدم
+           * fetchFolderImages لن ينكسر.
+           */
+          return result.images || [];
+        },
+        [fetchFolderMedia]
       );
 
     /* ========================================================
@@ -1896,6 +2368,10 @@ export const GoogleSheetsProvider:
       createProductFolder,
 
       uploadImageToDrive,
+
+      uploadMediaToDrive,
+
+      fetchFolderMedia,
 
       fetchFolderImages,
 

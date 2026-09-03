@@ -289,11 +289,14 @@ export const ProductAndCategoryCustomizer: React.FC = () => {
       ('AFF-' + Math.floor(1000 + Math.random() * 9000));
 
     const productPayload = {
+      product_id: `prod_${Date.now()}`,
+      status: 'active' as 'active' | 'draft' | 'archived',
       name: prodName.trim(),
       description: prodDescription.trim(),
       category: prodCategory,
       sku: autoSku,
       cost_price: Number(costPrice),
+      selling_price: Number(sellingPrice),
       price: Number(sellingPrice),
       originalPrice: Number(compareAtPrice),
       stock: Number(stockQuantity),

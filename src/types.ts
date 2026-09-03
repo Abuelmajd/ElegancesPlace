@@ -201,7 +201,23 @@ export interface Product {
   created_at: string;
   updated_at: string;
 
-  // Compatibility fields
+  // Compatibility fields (camelCase)
+  price?: number;
+  oldPrice?: number;
+  stock?: number;
+  bestSeller?: boolean;
+  newProduct?: boolean;
+  images?: any;
+  image?: string;
+  image_data?: any;
+  category?: string;
+  categoryName?: string;
+  supplier?: string;
+  originalPrice?: number;
+  costPrice?: number;
+  fulfillmentType?: string;
+
+  // Compatibility fields (snake_case from original interface)
   wholesale_price?: number;
   compare_at_price?: number;
   pricing_method?: PricingMethod;
@@ -782,6 +798,11 @@ export interface OrderItem {
   product_name_at_purchase?: string;
   supplier_id_at_purchase?: string;
   supplier_name_at_purchase?: string;
+  cost_price_at_purchase?: number;
+  selling_price_at_purchase?: number;
+  fulfillment_method_at_purchase?: string;
+  subtotal?: number;
+  discount_at_purchase?: number;
 }
 
 
@@ -1369,6 +1390,29 @@ export interface StoreSettings {
   header_style?: string;
   product_card_style?: string;
 
+  status?: string;
+  maintenance_message?: string;
+  free_shipping_threshold?: number;
+  return_policy?: string;
+  shipping_policy?: string;
+  exchange_policy?: string;
+  cancellation_policy?: string;
+  warranty_policy?: string;
+  privacy_policy?: string;
+  terms?: string;
+  hero_banner_url?: string;
+  hero_title?: string;
+  hero_subtitle?: string;
+  hero_bg_color?: string;
+  hero_bg_image?: string;
+  product_guarantees?: any;
+  social_links?: Record<string, string>;
+  seo?: {
+    meta_title?: string;
+    meta_description?: string;
+    keywords?: string;
+  };
+
   updated_at: string;
 }
 
@@ -1540,8 +1584,8 @@ export interface ExchangeRate {
 // هذه ليست جداول Google Sheets.
 // ============================================================
 
-export interface ProductWithRelations extends Product {
-  category?: Category;
+export interface ProductWithRelations extends Omit<Product, 'category'> {
+  categoryDetails?: Category;
   variants?: ProductVariant[];
   sources?: ProductSource[];
   images?: ProductImage[];

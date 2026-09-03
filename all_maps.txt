@@ -1,0 +1,176 @@
+src/admin/AccountingManagement.tsx:819: ].map((tab) => {
+src/admin/AccountingManagement.tsx:975: {customCategories.map((c) => (
+src/admin/AccountingManagement.tsx:1013: filteredExpenses.map((exp) => (
+src/admin/AccountingManagement.tsx:1108: supplierReport.map((sup) => (
+src/admin/AccountingManagement.tsx:1207: cashFlows.map((cf) => (
+src/admin/AccountingManagement.tsx:1294: refunds.map((ref) => (
+src/admin/AccountingManagement.tsx:1359: productReport.map((p) => (
+src/admin/AccountingManagement.tsx:1417: customerReport.map((c) => (
+src/admin/AccountingManagement.tsx:1475: {reconciliationItems.map((item, idx) => (
+src/admin/AccountingManagement.tsx:1541: {customCategories.map((c) => (
+src/admin/AccountingManagement.tsx:1698: {supplierReport.map((sup) => (
+src/admin/AccountingManagement.tsx:1820: {orders.map((o) => (
+src/admin/AccountingManagement.tsx:2067: {testResults.results.map((r, idx) => (
+src/admin/AccountingManagement.tsx:2082: {testResults.logs.map((l, idx) => (
+src/admin/AdminDashboard.tsx:169: return parsed.map((c: any) => c.name || c);
+src/admin/AdminDashboard.tsx:432: setSuppliers(prev => prev.map(s => s.supplier_id === editingSupplier.supplier_id ? {
+src/admin/AdminDashboard.tsx:721: ].map(renderMenuItem)}
+src/admin/AdminDashboard.tsx:728: ].map(renderMenuItem)}
+src/admin/AdminDashboard.tsx:739: ].map(renderMenuItem)}
+src/admin/AdminDashboard.tsx:747: ].map(renderMenuItem)}
+src/admin/AdminDashboard.tsx:914: ].map((item, i) => (
+src/admin/AdminDashboard.tsx:966: {filteredProducts.map((p) => (
+src/admin/AdminDashboard.tsx:1213: {categoriesList.map((cat) => (
+src/admin/AdminDashboard.tsx:1258: {['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'].map(size => (
+src/admin/AdminDashboard.tsx:1285: {suppliers.map((s) => (
+src/admin/AdminDashboard.tsx:1690: ? newTableColumns.split(',').map(c => c.trim()).filter(Boolean)
+src/admin/AdminDashboard.tsx:1733: {logs.map((log) => (
+src/admin/AdminDashboard.tsx:1752: const updates = updatedProducts.map(p => ({
+src/admin/AdminDashboard.tsx:1889: filteredSuppliers.map((s) => {
+src/admin/AdminDashboard.tsx:2460: {PALESTINIAN_CITIES.map((city) => (
+src/admin/AdminDashboard.tsx:2580: {filteredUsers.map((u) => (
+src/admin/AdminDashboard.tsx:2608: {ROLES_OPTIONS.map((opt) => (
+src/admin/ExecutiveReportsManagement.tsx:125: const reportData = filteredOrders.map(o => ({
+src/admin/ExecutiveReportsManagement.tsx:286: productProfitability.slice(0, 7).map((prod, idx) => (
+src/admin/ExecutiveReportsManagement.tsx:326: ].map(st => {
+src/admin/ExecutiveReportsManagement.tsx:350: {customerValues.slice(0, 4).map((cust, idx) => (
+src/admin/NotificationManagement.tsx:105: filteredNotifications.map(notif => (
+src/admin/OrdersManagement.tsx:152: .map(item => {
+src/admin/OrdersManagement.tsx:502: filteredOrders.map((order) => {
+src/admin/OrdersManagement.tsx:550: <div className="text-[10px] text-slate-500 max-w-[140px] truncate" title={items.map(i => `${i.product_name_at_purchase} (${i.quantity})`).join(', ')}>
+src/admin/OrdersManagement.tsx:551: {items.map(i => i.product_name_at_purchase).join(', ')}
+src/admin/OrdersManagement.tsx:926: {getOrderItems(selectedOrder.order_id).map((item) => (
+src/admin/OrdersManagement.tsx:968: getOrderFulfillments(selectedOrder.order_id).map((ful) => {
+src/admin/OrdersManagement.tsx:1157: {getOrderTimeline(selectedOrder.order_id).map((evt) => (
+src/admin/OrdersManagement.tsx:1177: {getOrderAuditLogs(selectedOrder.order_id).map((log) => (
+src/admin/OrdersManagement.tsx:1248: {getOrderItems(supplierModalOrder.order_id).map((item) => {
+src/admin/OrdersManagement.tsx:1591: {testLogs.map((l, idx) => (
+src/admin/ReturnsManagement.tsx:110: filteredRequests.map(req => (
+src/admin/ReturnsManagement.tsx:122: {req.items.map(i => `${i.product_name} (x${i.quantity})`).join(', ')}
+src/admin/ReviewsManagement.tsx:55: {['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'HIDDEN'].map(tab => (
+src/admin/ReviewsManagement.tsx:89: filteredReviews.map(review => {
+src/admin/ReviewsManagement.tsx:109: {[1, 2, 3, 4, 5].map(s => <Star key={s} className={`w-3.5 h-3.5 ${s <= review.rating ? 'fill-amber-400 text-amber-400' : 'text-stone-200'}`} />)}
+src/admin/SystemSettingsPage.tsx:155: ].map((p, idx) => (
+src/admin/components/GoogleDriveImageUploader.tsx:1375: {folderFiles.map(
+src/admin/store_management/HomepageSectionManager.tsx:55: const reordered = list.map((sec, idx) => ({ ...sec, order: idx + 1 }));
+src/admin/store_management/HomepageSectionManager.tsx:74: const updated = draftHomepageSections.map(s => s.id === editingSection.id ? editingSection : s);
+src/admin/store_management/HomepageSectionManager.tsx:111: {draftHomepageSections.map((sec, idx) => (
+src/admin/store_management/HomepageSectionManager.tsx:216: {(Object.keys(SECTION_TYPE_LABELS) as HomepageSectionType[]).map((type) => (
+src/admin/store_management/MediaLibraryManager.tsx:196: {['all', 'Categories', 'Banners', 'Products', 'Logo', 'General'].map((tag) => (
+src/admin/store_management/MediaLibraryManager.tsx:240: {filteredItems.map((item) => {
+src/admin/store_management/MediaLibraryManager.tsx:287: ].map(t => {
+src/admin/store_management/OffersAndDiscountsCenter.tsx:170: .map(offer => (
+src/admin/store_management/OffersAndDiscountsCenter.tsx:229: {coupons.map(coupon => (
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:557: setSelectedProductIds(filteredProducts.map(p => p.id));
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:751: {categories.map(c => (
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:815: return prev.map(img => img.is_primary ? {...img, image_url: base64} : img);
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:826: return prev.map(img => img.is_primary ? {...img, image_url: localUrl} : img);
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:847: return prev.map(img => img.is_primary ? {...img, image_url: newUrl} : img);
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:991: {stagedProducts.map((item) => {
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:1083: {categories.map((cat) => {
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:1248: {categories.map(c => (
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:1300: {filteredProducts.map(product => (
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:1376: setSelectedProductIds(products.map(p => p.id));
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:1557: {CATEGORY_IMAGE_PRESETS.map((preset, idx) => (
+src/admin/store_management/ProductAndCategoryCustomizer.tsx:1591: {EMOJI_PRESETS.map((em, i) => (
+src/admin/store_management/StoreManagementCenter.tsx:74: ].map(nav => {
+src/admin/store_management/StoreSettingsManager.tsx:63: items: (prev.items || []).map(item => item.id === id ? { ...item, ...partial } : item)
+src/admin/store_management/StoreSettingsManager.tsx:127: ].map(tab => (
+src/admin/store_management/StoreSettingsManager.tsx:386: ].map((preset, idx) => (
+src/admin/store_management/StoreSettingsManager.tsx:415: ].map((color) => (
+src/admin/store_management/StoreSettingsManager.tsx:528: ].map(st => (
+src/admin/store_management/StoreSettingsManager.tsx:686: {draftMenus.map((item) => (
+src/admin/store_management/StoreSettingsManager.tsx:828: {(guaranteesState.items || []).map((item) => (
+src/admin/store_management/StoreSettingsManager.tsx:974: {products.map(p => (
+src/admin/store_management/VisualStoreCustomizer.tsx:73: ].map(tab => {
+src/admin/store_management/VisualStoreCustomizer.tsx:103: {(Object.keys(THEME_PRESETS) as ThemePresetName[]).map(presetName => {
+src/admin/store_management/VisualStoreCustomizer.tsx:152: ].map(item => (
+src/admin/store_management/VisualStoreCustomizer.tsx:192: {['none', 'sm', 'md', 'lg', 'xl', 'full'].map(r => (
+src/admin/store_management/VisualStoreCustomizer.tsx:237: ].map(style => (
+src/components/PricingCalculatorPage.tsx:17: else setSelectedProductIds(new Set(products.map(p => p.id)));
+src/components/PricingCalculatorPage.tsx:29: const updatedProducts = products.map(p => {
+src/components/PricingCalculatorPage.tsx:52: <table className="w-full bg-white rounded-xl border border-slate-200"><thead><tr className="text-right border-b border-slate-200"><th className="p-4"><input type="checkbox" onChange={toggleAll} checked={selectedProductIds.size === products.length && products.length > 0}/></th><th className="p-4">اسم المنتج</th><th className="p-4">سعر الجملة</th><th className="p-4">سعر البيع</th></tr></thead><tbody>{products.map(p => (<tr key={p.id} className="border-b border-slate-100"><td className="p-4"><input type="checkbox" checked={selectedProductIds.has(p.id)} onChange={() => toggleProduct(p.id)}/></td><td className="p-4">{p.name}</td><td className="p-4">{p.wholesalePrice}</td><td className="p-4">{p.price}</td></tr>))}</tbody></table>
+src/components/admin/Phase1SetupView.tsx:428: ].map((item) => (
+src/components/admin/Phase1SetupView.tsx:479: {tables.map((tableName, index) => (
+src/components/common/NotificationBell.tsx:206: {userNotifications.map((notif) => (
+src/contexts/AccountingContext.tsx:537: setExpenses(prev => prev.map(exp => {
+src/contexts/AccountingContext.tsx:635: setSupplierPayments(prev => prev.map(p => {
+src/contexts/AccountingContext.tsx:719: setRefunds(prev => prev.map(r => {
+src/contexts/AccountingContext.tsx:785: setPayments(prev => prev.map(p => {
+src/contexts/AccountingContext.tsx:867: const validOrderIds = new Set(validOrders.map(o => o.order_id));
+src/contexts/AccountingContext.tsx:1387: const csvContent = '\uFEFF' + rows.map(r => r.join(',')).join('\n');
+src/contexts/AuthContext.tsx:102: const updated = allUsers.map(u => u.user_id === userId ? { ...u, role: newRole } : u);
+src/contexts/CategoryContext.tsx:118: return parsed.map((cat: any, idx: number) => ({
+src/contexts/CategoryContext.tsx:142: localStorage.setItem('elites_category_names', JSON.stringify(categories.map(c => c.name)));
+src/contexts/CategoryContext.tsx:158: setCategories(prev => prev.map(cat => (cat.id === id || cat.category_id === id) ? { ...cat, ...updates } : cat));
+src/contexts/CategoryContext.tsx:166: setCategories(prev => prev.map(cat => {
+src/contexts/GoogleSheetsContext.tsx:327: return value.map(
+src/contexts/GoogleSheetsContext.tsx:397: return data.map(
+src/contexts/GoogleSheetsContext.tsx:1809: .map(
+src/contexts/NotificationContext.tsx:223: setNotifications(prev => prev.map(n => ({ ...n, sync_status: 'SYNCED' })));
+src/contexts/NotificationContext.tsx:310: setNotifications(prev => prev.map(n => n.notification_id === newNotif.notification_id ? { ...n, sync_status: 'SYNCED' } : n));
+src/contexts/NotificationContext.tsx:336: setNotifications(prev => prev.map(n => {
+src/contexts/NotificationContext.tsx:351: setNotifications(prev => prev.map(n => ({
+src/contexts/NotificationContext.tsx:565: const normalizedProducts: Product[] = items.map((item: any) => ({
+src/contexts/OrderContext.tsx:758: setCustomers(prev => prev.map(c =>
+src/contexts/OrderContext.tsx:852: setOrders(prev => prev.map(o => o.order_id === orderId ? { ...o, sync_status: synced ? 'SYNCED' : 'FAILED' } : o));
+src/contexts/OrderContext.tsx:854: setOrders(prev => prev.map(o => o.order_id === orderId ? { ...o, sync_status: 'FAILED' } : o));
+src/contexts/OrderContext.tsx:886: setOrders(prev => prev.map(o => o.order_id === orderId ? {
+src/contexts/OrderContext.tsx:911: setOrders(prev => prev.map(o => o.order_id === orderId ? {
+src/contexts/OrderContext.tsx:918: setSupplierFulfillments(prev => prev.map(f => f.order_id === orderId ? {
+src/contexts/OrderContext.tsx:958: setOrders(prev => prev.map(o => o.order_id === orderId ? {
+src/contexts/OrderContext.tsx:965: setSupplierFulfillments(prev => prev.map(f => f.order_id === orderId ? {
+src/contexts/OrderContext.tsx:998: setSupplierFulfillments(prev => prev.map(f => f.fulfillment_id === fulfillmentId ? {
+src/contexts/OrderContext.tsx:1055: setSupplierFulfillments(prev => prev.map(f => f.fulfillment_id === fulfillmentId ? {
+src/contexts/OrderContext.tsx:1092: setOrders(prev => prev.map(o => o.order_id === orderId ? {
+src/contexts/OrderContext.tsx:1103: setSupplierFulfillments(prev => prev.map(f => f.order_id === orderId ? {
+src/contexts/ProductContext.tsx:182: return images.map(
+src/contexts/ProductContext.tsx:316: return products.map(
+src/contexts/ProductContext.tsx:842: return currentCache.map(
+src/contexts/ProductContext.tsx:1284: currentProducts.map(
+src/contexts/ProductContext.tsx:1458: currentProducts.map(
+src/contexts/ReturnContext.tsx:150: setReturnRequests(prev => prev.map(r => r.request_id === requestId ? {
+src/contexts/ReviewContext.tsx:181: setReviews(prev => prev.map(r => {
+src/contexts/ReviewContext.tsx:201: setReviews(prev => prev.map(r => {
+src/contexts/StoreContext.tsx:536: const updated = draftHomepageSections.map(s => s.id === id ? { ...s, visible: !s.visible } : s);
+src/contexts/StoreContext.tsx:552: const reordered = list.map((item, idx) => ({ ...item, order: idx + 1 }));
+src/contexts/StoreContext.tsx:585: setOffers(prev => prev.map(o => o.id === id ? { ...o, ...partial } : o));
+src/contexts/StoreContext.tsx:593: setOffers(prev => prev.map(o => o.id === id ? { ...o, active: !o.active } : o));
+src/contexts/StoreContext.tsx:606: setCoupons(prev => prev.map(c => c.coupon_id === id ? { ...c, ...partial } : c));
+src/contexts/StoreContext.tsx:623: setMediaItems(prev => prev.map(m => m.id === id ? { ...m, ...partial } : m));
+src/customer/ProductDetailsModal.tsx:235: {activeGuarantees.map((item) => (
+src/customer/ProductDetailsModal.tsx:258: {[1, 2, 3, 4, 5].map(s => <Star key={s} className={`w-4 h-4 ${s <= Number(averageRating) ? 'fill-current' : 'text-stone-300'}`} />)}
+src/customer/ProductDetailsModal.tsx:264: {[5, 4, 3, 2, 1].map(stars => {
+src/customer/ProductDetailsModal.tsx:290: {[1, 2, 3, 4, 5].map(s => (
+src/customer/ProductDetailsModal.tsx:337: reviews.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(review => (
+src/customer/ProductDetailsModal.tsx:342: {[1, 2, 3, 4, 5].map(s => <Star key={s} className={`w-3.5 h-3.5 ${s <= review.rating ? 'fill-amber-400 text-amber-400' : 'text-stone-300'}`} />)}
+src/customer/StorefrontHome.tsx:211: return prev.map((item) =>
+src/customer/StorefrontHome.tsx:225: .map((item) => {
+src/customer/StorefrontHome.tsx:284: const itemsInput = cart.map((item) => ({
+src/customer/StorefrontHome.tsx:531: {(filteredCities || []).map((city) => (
+src/customer/StorefrontHome.tsx:874: {activeCategories.map((cat) => {
+src/customer/StorefrontHome.tsx:978: {filteredProducts.map((p) => (
+src/customer/StorefrontHome.tsx:1117: .map((item) => {
+src/customer/StorefrontHome.tsx:1204: cart.map((item) => (
+src/customer/StorefrontHome.tsx:1327: {PALESTINIAN_CITIES.map((c) => (
+src/customer/StorefrontHome.tsx:1427: myOrders.map((ord) => (
+src/customer/StorefrontHome.tsx:1455: {ord.items && ord.items.map(item => {
+src/customer/portal/InvoiceViewModal.tsx:130: {orderItems.map((item, idx) => {
+src/customer/portal/MyOrdersTab.tsx:74: .map(i => ({
+src/customer/portal/MyOrdersTab.tsx:173: {filteredOrders.map(order => {
+src/customer/portal/MyOrdersTab.tsx:199: {items.map(itm => (
+src/customer/portal/MyOrdersTab.tsx:306: {getOrderItems(selectedOrder.order_id).map(itm => {
+src/customer/portal/MyOrdersTab.tsx:325: {getOrderTimeline(selectedOrder.order_id).map(evt => (
+src/customer/portal/MyOrdersTab.tsx:410: {getOrderItems(returnOrderModal.order_id).map(itm => (
+src/customer/portal/NotificationsTab.tsx:51: userNotifications.map(notif => (
+src/customer/portal/OrderTrackingTab.tsx:61: myOrders.map(o => (
+src/customer/portal/OrderTrackingTab.tsx:185: timelineEvents.map((evt, idx) => (
+src/customer/portal/ReturnsTab.tsx:60: userReturnRequests.map(req => (
+src/customer/portal/ReturnsTab.tsx:83: {req.items.map(i => (
+src/customer/portal/ReviewsTab.tsx:122: myReviews.map(rev => (
+src/customer/portal/ReviewsTab.tsx:126: {[1, 2, 3, 4, 5].map(s => (
+src/customer/portal/ReviewsTab.tsx:198: {deliverdProducts.map((dp, idx) => (
+src/customer/portal/ReviewsTab.tsx:204: {products.map((p) => (
+src/customer/portal/ReviewsTab.tsx:215: {[1, 2, 3, 4, 5].map(s => (
+src/customer/portal/WishlistTab.tsx:11: const savedProducts = wishlistItems.map(item => {
+src/customer/portal/WishlistTab.tsx:38: {savedProducts.map(({ item, prod }) => {

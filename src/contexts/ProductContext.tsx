@@ -814,6 +814,7 @@ export const ProductProvider:
     const {
       createProductFolder,
       uploadImageToDrive,
+      syncNow,
     } = useGoogleSheets();
 
     /* =======================================================
@@ -1071,8 +1072,27 @@ export const ProductProvider:
         dispatchProductChanged();
 
         console.log(
-          "ProductContext V3: تمت إضافة المنتج:",
+          "ProductContext V3: تمت إضافة المنتج محليًا:",
           newProduct
+        );
+
+        /*
+         * الآن بعد أن تم حفظ Products وMedia
+         * في LocalStorage، نرسل البيانات إلى
+         * Google Sheets / Apps Script V3.
+         */
+        const syncSuccess = await syncNow();
+
+        if (!syncSuccess) {
+          console.error(
+            "ProductContext V3: فشلت مزامنة المنتج مع Google Sheets."
+          );
+
+          return false;
+        }
+
+        console.log(
+          "ProductContext V3: تمت مزامنة المنتج بنجاح مع Google Sheets."
         );
 
         return true;

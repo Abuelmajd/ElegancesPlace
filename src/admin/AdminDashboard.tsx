@@ -553,59 +553,199 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     }
   };
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  const handleCreateProduct = async (
+    e: React.FormEvent
+  ) => {
     e.preventDefault();
-    if (!prodImage) {
-      alert('يرجى إضافة أو رفع صورة للمنتج');
+
+    if (!prodName.trim()) {
+      alert("يرجى إدخال اسم المنتج");
       return;
     }
 
-    const wholesale = Number(prodWholesalePrice) || 0;
-    const finalPrice = Number(prodPrice) || 0;
-
-    if (editingProduct) {
-      updateProduct(editingProduct.id, {
-        name: prodName,
-        price: finalPrice,
-        oldPrice: Number(prodOldPrice) || undefined,
-        costPrice: wholesale,
-        category: prodCategory,
-        image: prodImage,
-        drive_file_id: prodDriveFileId || undefined,
-        image_data: prodImage.startsWith('data:image') ? prodImage : undefined,
-        supplier: prodSupplier,
-        stock: Number(prodStock) || 999,
-        description: prodDesc,
-      });
-      setSuccessMsg('تم تعديل وتحديث بيانات المنتج وسعر الجملة وهامش الربح بنجاح!');
-    } else {
-      addProduct({
-        product_id: `prod_${Date.now()}`,
-        sku: `SKU-${Date.now()}`,
-        status: 'active',
-        name: prodName,
-        selling_price: finalPrice,
-        cost_price: wholesale,
-        old_price: Number(prodOldPrice) || undefined,
-        category: prodCategory,
-        image: prodImage,
-        drive_file_id: prodDriveFileId || undefined,
-        image_data: prodImage.startsWith('data:image') ? prodImage : undefined,
-        supplier: prodSupplier,
-        stock: Number(prodStock) || 999,
-        description: prodDesc,
-        badge: 'جديد'
-      });
-      setSuccessMsg('تمت إضافة المنتج الجديد وسعر الجملة بنجاح إلى المتجر وقاعدة البيانات!');
+    if (!prodImage) {
+      alert("يرجى إضافة صورة للمنتج");
+      return;
     }
-    setProductMode('list');
-    setEditingProduct(null);
-    setProdName('');
-    setProdDesc('');
-    setImageFileName('');
-    setImageFileSize('');
-    setProdDriveFileId('');
-    setTimeout(() => setSuccessMsg(''), 4000);
+
+    const wholesale =
+      Number(prodWholesalePrice) || 0;
+
+    const finalPrice =
+      Number(prodPrice) || 0;
+
+    try {
+      /* =====================================================
+         EDIT PRODUCT
+         ===================================================== */
+
+      if (editingProduct) {
+        const success =
+          await updateProduct(
+            editingProduct.id,
+            {
+              name: prodName.trim(),
+
+              description:
+                prodDesc || "",
+
+              selling_price:
+                finalPrice,
+
+              cost_price:
+                wholesale,
+
+              old_price:
+                Number(prodOldPrice) || 0,
+
+              category_id:
+                prodCategory || "",
+
+              image_url:
+                prodImage,
+
+              drive_file_id:
+                prodDriveFileId || "",
+
+              fulfillment_method:
+                "OWN_STOCK",
+
+              stock_tracking:
+                false,
+
+              status:
+                "ACTIVE",
+
+              badge:
+                "جديد",
+            }
+          );
+
+        if (!success) {
+          alert(
+            "تعذر تحديث المنتج. تحقق من Google Sheets وGoogle Drive."
+          );
+          return;
+        }
+
+        setSuccessMsg(
+          "تم تحديث المنتج ومزامنته بنجاح."
+        );
+      }
+
+      /* =====================================================
+         ADD NEW PRODUCT
+         ===================================================== */
+
+      else {
+        const success =
+          await addProduct({
+            product_id:
+              `prod_${Date.now()}`,
+
+            sku:
+              `SKU-${Date.now()}`,
+
+            status:
+              "ACTIVE",
+
+            name:
+              prodName.trim(),
+
+            description:
+              prodDesc || "",
+
+            selling_price:
+              finalPrice,
+
+            cost_price:
+              wholesale,
+
+            old_price:
+              Number(prodOldPrice) || 0,
+
+            category_id:
+              prodCategory || "",
+
+            image_url:
+              prodImage,
+
+            drive_file_id:
+              prodDriveFileId || "",
+
+            fulfillment_method:
+              "OWN_STOCK",
+
+            stock_tracking:
+              false,
+
+            badge:
+              "جديد",
+
+            rating:
+              0,
+
+            cost_currency:
+              "ILS",
+
+            selling_currency:
+              "ILS",
+
+            old_price_currency:
+              "ILS",
+
+            product_group_id:
+              "",
+          });
+
+        if (!success) {
+          alert(
+            "تعذر حفظ المنتج. تحقق من Google Sheets وGoogle Drive."
+          );
+          return;
+        }
+
+        setSuccessMsg(
+          "تمت إضافة المنتج ورفع الصورة إلى Google Drive ومزامنته مع Google Sheets بنجاح."
+        );
+      }
+
+      /* =====================================================
+         RESET FORM
+         ===================================================== */
+
+      setProductMode("list");
+      setEditingProduct(null);
+
+      setProdName("");
+      setProdDesc("");
+
+      setProdWholesalePrice("100");
+      setProfitMarginType("percentage");
+      setProfitMarginVal("30");
+      setProdPrice("130");
+      setProdOldPrice("160");
+
+      setImageFileName("");
+      setImageFileSize("");
+      setProdDriveFileId("");
+      setProdImage("");
+
+      setTimeout(
+        () => setSuccessMsg(""),
+        4000
+      );
+
+    } catch (error) {
+      console.error(
+        "خطأ أثناء حفظ المنتج:",
+        error
+      );
+
+      alert(
+        "حدث خطأ أثناء حفظ المنتج. افتح Console لمعرفة التفاصيل."
+      );
+    }
   };
 
   const openAddProductPage = () => {
@@ -617,7 +757,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     setProdPrice('130');
     setProdOldPrice('160');
     setProdCategory(categoriesList[0] || 'عطور');
-    setProdImage('https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=60');
+    
+    // مهم جدًا
+    setProdImage('');
+    setProdDriveFileId('');
+    setImageFileName('');
+    setImageFileSize('');
+    
     setProdSupplier('المورد الرئيسي');
     setProdStock('999');
     setProdDesc('');

@@ -1775,7 +1775,7 @@ export const ProductProvider:
        DELETE PRODUCT
        ======================================================= */
 
-    const deleteProduct = (
+    const deleteProduct = async (
       id: string
     ) => {
 
@@ -1856,18 +1856,40 @@ export const ProductProvider:
         }
 
         /*
-         * IMPORTANT:
+         * ===================================================
+         * INCREMENTAL DELETE SYNC
+         * ===================================================
          *
-         * Do NOT delete the Google Drive file here.
+         * حذف المنتج من Google Sheets أيضًا.
          *
-         * Also do NOT send a normal incremental
-         * sync for deletion because the current
-         * backend does not implement an explicit
-         * delete operation.
-         *
-         * This prevents accidental data loss in
-         * Google Sheets.
+         * لا نحذف ملف Google Drive تلقائيًا.
          */
+
+        const syncSuccess =
+          await syncChangedTables({
+            deleted: {
+              products: [
+                existingProduct.id,
+              ],
+            },
+          });
+
+        if (!syncSuccess) {
+          console.error(
+            "ProductContext V3: فشلت مزامنة حذف المنتج مع Google Sheets."
+          );
+
+          /*
+           * المنتج حُذف محليًا، لكن بقي في Google Sheets.
+           * سيبقى محليًا محذوفًا إلى أن تتم إعادة المزامنة.
+           */
+          return;
+        }
+
+        console.log(
+          "ProductContext V3: تمت مزامنة حذف المنتج مع Google Sheets:",
+          existingProduct.id
+        );
 
         setProducts(
           updatedProducts

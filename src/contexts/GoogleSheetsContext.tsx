@@ -124,9 +124,10 @@ export type V3TableName =
  * يمكن استخدام هذا النوع عندما نريد إرسال
  * تغييرات محددة فقط إلى Apps Script.
  */
-export type V3ChangedTablesPayload = Partial<
-  Record<V3TableName, unknown[]>
->;
+export type V3ChangedTablesPayload = {
+  tables?: Partial<Record<V3TableName, unknown[]>>;
+  deleted?: Partial<Record<V3TableName, string[]>>;
+};
 
 interface GoogleSheetsContextType {
   config: GoogleSheetsConfig;
@@ -929,14 +930,17 @@ export const GoogleSheetsProvider:
       useCallback(
         (
           tableName: V3TableName,
-          syncedRecords: unknown[]
+          syncedRecords: unknown[],
+          deletedIds: string[] = []
         ) => {
           if (
-            !Array.isArray(
+            (!Array.isArray(
               syncedRecords
             ) ||
-            syncedRecords.length ===
-              0
+              syncedRecords.length ===
+                0) &&
+            (!Array.isArray(deletedIds) ||
+              deletedIds.length === 0)
           ) {
             return;
           }
@@ -997,6 +1001,18 @@ export const GoogleSheetsProvider:
                   record
                 );
               }
+            }
+          );
+
+          /*
+           * إزالة السجلات التي تم حذفها
+           * بنجاح من Google Sheets.
+           */
+          deletedIds.forEach(
+            (id) => {
+              snapshotById.delete(
+                String(id)
+              );
             }
           );
 
@@ -1914,7 +1930,9 @@ export const GoogleSheetsProvider:
               timestamp:
                 new Date().toISOString(),
 
-              tables,
+              tables: tables.tables,
+
+              deleted: tables.deleted,
             };
 
             const totalRecords =

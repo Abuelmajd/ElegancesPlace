@@ -1792,46 +1792,153 @@ export const GoogleSheetsProvider:
               typeof requestedTables ===
                 "object"
             ) {
-              Object.entries(
-                requestedTables
-              ).forEach(
-                ([
-                  tableName,
-                  records,
-                ]) => {
-                  if (
-                    !V3_TABLE_NAMES.includes(
-                      tableName as V3TableName
-                    )
-                  ) {
-                    throw new Error(
-                      `جدول V3 غير معروف: ${tableName}`
-                    );
-                  }
+              const payloadInput = requestedTables as any;
 
-                  if (
-                    !Array.isArray(
-                      records
-                    )
-                  ) {
-                    throw new Error(
-                      `بيانات الجدول ${tableName} يجب أن تكون Array.`
-                    );
-                  }
+              const isStructuredPayload =
+                Object.prototype.hasOwnProperty.call(
+                  payloadInput,
+                  "tables"
+                ) ||
+                Object.prototype.hasOwnProperty.call(
+                  payloadInput,
+                  "deleted"
+                );
 
-                  if (
-                    records.length >
-                    0
-                  ) {
-                    tables[
-                      tableName as V3TableName
-                    ] =
-                      cleanArrayForStorage(
-                        records
-                      );
-                  }
+              if (isStructuredPayload) {
+                if (
+                  payloadInput.tables &&
+                  typeof payloadInput.tables ===
+                    "object"
+                ) {
+                  Object.entries(
+                    payloadInput.tables
+                  ).forEach(
+                    ([
+                      tableName,
+                      records,
+                    ]) => {
+                      if (
+                        !V3_TABLE_NAMES.includes(
+                          tableName as V3TableName
+                        )
+                      ) {
+                        throw new Error(
+                          `جدول V3 غير معروف: ${tableName}`
+                        );
+                      }
+
+                      if (
+                        !Array.isArray(
+                          records
+                        )
+                      ) {
+                        throw new Error(
+                          `بيانات الجدول ${tableName} يجب أن تكون Array.`
+                        );
+                      }
+
+                      if (
+                        (records as unknown[])
+                          .length > 0
+                      ) {
+                        tables.tables![
+                          tableName as V3TableName
+                        ] =
+                          cleanArrayForStorage(
+                            records
+                          );
+                      }
+                    }
+                  );
                 }
-              );
+
+                if (
+                  payloadInput.deleted &&
+                  typeof payloadInput.deleted ===
+                    "object"
+                ) {
+                  Object.entries(
+                    payloadInput.deleted
+                  ).forEach(
+                    ([
+                      tableName,
+                      ids,
+                    ]) => {
+                      if (
+                        !V3_TABLE_NAMES.includes(
+                          tableName as V3TableName
+                        )
+                      ) {
+                        throw new Error(
+                          `جدول V3 غير معروف: ${tableName}`
+                        );
+                      }
+
+                      if (
+                        !Array.isArray(
+                          ids
+                        )
+                      ) {
+                        throw new Error(
+                          `معرفات المحذوفات للجدول ${tableName} يجب أن تكون Array.`
+                        );
+                      }
+
+                      if (
+                        (ids as unknown[])
+                          .length > 0
+                      ) {
+                        tables.deleted![
+                          tableName as V3TableName
+                        ] = (
+                          ids as unknown[]
+                        ).map(String);
+                      }
+                    }
+                  );
+                }
+              } else {
+                Object.entries(
+                  requestedTables
+                ).forEach(
+                  ([
+                    tableName,
+                    records,
+                  ]) => {
+                    if (
+                      !V3_TABLE_NAMES.includes(
+                        tableName as V3TableName
+                      )
+                    ) {
+                      throw new Error(
+                        `جدول V3 غير معروف: ${tableName}`
+                      );
+                    }
+
+                    if (
+                      !Array.isArray(
+                        records
+                      )
+                    ) {
+                      throw new Error(
+                        `بيانات الجدول ${tableName} يجب أن تكون Array.`
+                      );
+                    }
+
+                    if (
+                      (records as unknown[])
+                        .length > 0
+                    ) {
+                      tables.tables![
+                        tableName as V3TableName
+                      ] =
+                        cleanArrayForStorage(
+                          records
+                        );
+                    }
+                  }
+                );
+              }
             }
 
             /*
@@ -2012,7 +2119,14 @@ export const GoogleSheetsProvider:
              * ==================================================
              */
 
-            tableNames.forEach(
+            const snapshotTableNames = Array.from(
+              new Set([
+                ...tableNames,
+                ...deletedNames,
+              ])
+            );
+
+            snapshotTableNames.forEach(
               (
                 tableName
               ) => {
@@ -2020,20 +2134,20 @@ export const GoogleSheetsProvider:
                   tableName as V3TableName;
 
                 const syncedRecords =
-                  tables[
+                  tables.tables?.[
                     typedName
-                  ];
+                  ] || [];
 
-                if (
-                  Array.isArray(
-                    syncedRecords
-                  )
-                ) {
-                  mergeSnapshotRecords(
-                    typedName,
-                    syncedRecords
-                  );
-                }
+                const deletedIds =
+                  tables.deleted?.[
+                    typedName
+                  ] || [];
+
+                mergeSnapshotRecords(
+                  typedName,
+                  syncedRecords,
+                  deletedIds
+                );
               }
             );
 

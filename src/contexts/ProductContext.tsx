@@ -53,9 +53,9 @@ import {
  *
  * IMPORTANT:
  *
- * supplier_id  -> product_sources
- * stock        -> inventory
- * image_data   -> never stored
+ * supplier_id -> product_sources
+ * stock       -> inventory
+ * image_data  -> never stored
  */
 
 export type StoreProduct = Product & {
@@ -447,13 +447,18 @@ function saveProductsCache(
    PRODUCT IMAGE METADATA CACHE
    ========================================================= */
 
+/**
+ * Saves a lightweight ProductImage record locally
+ * and returns the exact record that can be sent
+ * through incremental sync.
+ */
 function saveProductImageRecord(
   productId: string,
   driveId: string,
   imageUrl: string
-): void {
+): ProductImage | undefined {
   if (!driveId) {
-    return;
+    return undefined;
   }
 
   try {
@@ -521,11 +526,17 @@ function saveProductImageRecord(
         )
       )
     );
+
+    return record;
+
   } catch (error) {
+
     console.warn(
       "تعذر حفظ بيانات صورة المنتج:",
       error
     );
+
+    return undefined;
   }
 }
 
@@ -846,7 +857,19 @@ export const ProductProvider:
     const {
       createProductFolder,
       uploadImageToDrive,
-      syncNow,
+
+      /*
+       * IMPORTANT:
+       *
+       * We intentionally use incremental sync
+       * instead of syncNow() for normal product
+       * create/update operations.
+       *
+       * syncNow remains available inside
+       * GoogleSheetsContext as the full-sync
+       * recovery mechanism.
+       */
+      syncChangedTables,
     } = useGoogleSheets();
 
     /* =======================================================
@@ -1094,14 +1117,23 @@ export const ProductProvider:
           updatedProducts
         );
 
+        /*
+         * Save image metadata locally and keep
+         * the exact record for incremental sync.
+         */
+        let imageRecord:
+          | ProductImage
+          | undefined;
+
         if (
           driveFileId
         ) {
-          saveProductImageRecord(
-            databaseId,
-            driveFileId,
-            imageUrl
-          );
+          imageRecord =
+            saveProductImageRecord(
+              databaseId,
+              driveFileId,
+              imageUrl
+            );
         }
 
         setProducts(
@@ -1115,23 +1147,56 @@ export const ProductProvider:
           newProduct
         );
 
-        /*
-         * الآن بعد أن تم حفظ Products وMedia
-         * في LocalStorage، نرسل البيانات إلى
-         * Google Sheets / Apps Script V3.
-         */
-        const syncSuccess = await syncNow();
+        /* =====================================================
+           INCREMENTAL SYNC
+           ===================================================== */
 
-        if (!syncSuccess) {
-          console.error(
-            "ProductContext V3: فشلت مزامنة المنتج مع Google Sheets."
+        const changedTables = {
+          products: [
+            sanitizeProductForCache(
+              newProduct
+            ),
+          ],
+        };
+
+        if (
+          imageRecord
+        ) {
+          (changedTables as Record<string, unknown[]>).product_images = [
+            imageRecord,
+          ];
+        }
+
+        /*
+         * IMPORTANT:
+         *
+         * We send ONLY the newly created product
+         * and its image metadata.
+         *
+         * We do NOT send the complete database.
+         */
+        const syncSuccess =
+          await syncChangedTables(
+            changedTables
           );
 
+        if (!syncSuccess) {
+
+          console.error(
+            "ProductContext V3: فشلت المزامنة التدريجية للمنتج مع Google Sheets."
+          );
+
+          /*
+           * Local data is intentionally kept.
+           *
+           * This allows a later incremental sync
+           * or a manual full recovery sync.
+           */
           return false;
         }
 
         console.log(
-          "ProductContext V3: تمت مزامنة المنتج بنجاح مع Google Sheets."
+          "ProductContext V3: تمت المزامنة التدريجية للمنتج بنجاح."
         );
 
         return true;
@@ -1187,6 +1252,9 @@ export const ProductProvider:
           existingProduct.drive_file_id ||
           "";
 
+        let imageWasUpdated =
+          false;
+
         /* =====================================================
            IMAGE UPDATE
            ===================================================== */
@@ -1195,6 +1263,8 @@ export const ProductProvider:
           updatedFields.image_url !==
           undefined
         ) {
+
+          imageWasUpdated = true;
 
           const newImage =
             updatedFields.image_url ||
@@ -1355,14 +1425,25 @@ export const ProductProvider:
           updatedProducts
         );
 
+        /*
+         * If the image changed, save the new
+         * lightweight image metadata and send
+         * it incrementally as well.
+         */
+        let imageRecord:
+          | ProductImage
+          | undefined;
+
         if (
+          imageWasUpdated &&
           driveFileId
         ) {
-          saveProductImageRecord(
-            mergedProduct.id,
-            driveFileId,
-            imageUrl
-          );
+          imageRecord =
+            saveProductImageRecord(
+              mergedProduct.id,
+              driveFileId,
+              imageUrl
+            );
         }
 
         setProducts(
@@ -1372,8 +1453,57 @@ export const ProductProvider:
         dispatchProductChanged();
 
         console.log(
-          "ProductContext V3: تم تحديث المنتج:",
+          "ProductContext V3: تم تحديث المنتج محليًا:",
           mergedProduct
+        );
+
+        /* =====================================================
+           INCREMENTAL SYNC
+           ===================================================== */
+
+        const changedTables = {
+          products: [
+            sanitizeProductForCache(
+              mergedProduct
+            ),
+          ],
+        };
+
+        if (
+          imageRecord
+        ) {
+          (changedTables as Record<string, unknown[]>).product_images = [
+            imageRecord,
+          ];
+        }
+
+        /*
+         * IMPORTANT:
+         *
+         * Only this product is sent.
+         *
+         * No full products table.
+         * No full database.
+         */
+        const syncSuccess =
+          await syncChangedTables(
+            changedTables
+          );
+
+        if (!syncSuccess) {
+
+          console.error(
+            "ProductContext V3: فشلت المزامنة التدريجية لتحديث المنتج."
+          );
+
+          /*
+           * Local changes remain saved.
+           */
+          return false;
+        }
+
+        console.log(
+          "ProductContext V3: تمت مزامنة تحديث المنتج بنجاح."
         );
 
         return true;
@@ -1555,6 +1685,25 @@ export const ProductProvider:
             }
           );
 
+        /*
+         * Determine exactly which products
+         * actually changed.
+         */
+        const changedProducts =
+          updatedProducts.filter(
+            (product) => {
+
+              const update =
+                updateMap.get(
+                  product.id
+                );
+
+              return Boolean(
+                update
+              );
+            }
+          );
+
         productsRef.current =
           updatedProducts;
 
@@ -1569,9 +1718,49 @@ export const ProductProvider:
         dispatchProductChanged();
 
         console.log(
-          "ProductContext V3: تم تحديث المنتجات:",
-          updatedProducts
+          "ProductContext V3: تم تحديث المنتجات محليًا:",
+          changedProducts
         );
+
+        /* =====================================================
+           INCREMENTAL BULK SYNC
+           ===================================================== */
+
+        if (
+          changedProducts.length > 0
+        ) {
+
+          void syncChangedTables({
+            products:
+              changedProducts.map(
+                sanitizeProductForCache
+              ),
+          }).then(
+            (success) => {
+
+              if (!success) {
+
+                console.error(
+                  "ProductContext V3: فشلت المزامنة التدريجية للتحديث الجماعي."
+                );
+
+                return;
+              }
+
+              console.log(
+                "ProductContext V3: تمت مزامنة التحديث الجماعي للمنتجات بنجاح."
+              );
+            }
+          ).catch(
+            (error) => {
+
+              console.error(
+                "ProductContext V3: خطأ أثناء المزامنة التدريجية للتحديث الجماعي:",
+                error
+              );
+            }
+          );
+        }
 
       } catch (error) {
 
@@ -1671,8 +1860,13 @@ export const ProductProvider:
          *
          * Do NOT delete the Google Drive file here.
          *
-         * Drive deletion will be implemented separately
-         * with explicit backend ownership rules.
+         * Also do NOT send a normal incremental
+         * sync for deletion because the current
+         * backend does not implement an explicit
+         * delete operation.
+         *
+         * This prevents accidental data loss in
+         * Google Sheets.
          */
 
         setProducts(

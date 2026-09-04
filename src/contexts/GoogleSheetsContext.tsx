@@ -70,111 +70,11 @@ interface FetchFolderMediaResult {
   error?: string;
 }
 
-interface GoogleSheetsContextType {
-  config: GoogleSheetsConfig;
-
-  setConfig: React.Dispatch<
-    React.SetStateAction<GoogleSheetsConfig>
-  >;
-
-  isSyncing: boolean;
-
-  lastSync: string | null;
-
-  syncError: string | null;
-
-  syncNow: () => Promise<boolean>;
-
-  pullFromSheets: () => Promise<boolean>;
-
-  createProductFolder: (
-    productName: string,
-    sku: string
-  ) => Promise<CreateProductFolderResult>;
-
-  uploadImageToDrive: (
-    base64Data: string,
-    fileName: string,
-    mimeType?: string,
-    targetType?: string,
-    folderId?: string
-  ) => Promise<UploadImageResult>;
-
-  uploadMediaToDrive: (
-    base64Data: string,
-    fileName: string,
-    mimeType: string,
-    targetType?: string,
-    folderId?: string
-  ) => Promise<UploadMediaResult>;
-
-  fetchFolderMedia: (
-    folderId: string
-  ) => Promise<FetchFolderMediaResult>;
-
-  /*
-   * Wrapper قديم للتوافق مع المكونات القديمة.
-   * يعيد الصور فقط.
-   */
-  fetchFolderImages: (
-    folderId: string
-  ) => Promise<FolderMediaFile[]>;
-
-  triggerSync: () => void;
-}
-
-/* ============================================================
-   DEFAULT CONFIG
-   ============================================================ */
-
-const DEFAULT_CONFIG: GoogleSheetsConfig = {
-  sheetId:
-    "1MtmMwC9bBrEgX-y2wqltuvwmIsPIt0vUdi0L03JesRU",
-
-  webhookUrl:
-    "https://script.google.com/macros/s/AKfycbw2bDPslbyuoZ-bhC2pIgLPJZglO2mum2IkSWl1hqYiwjwPCkvDeY4qUqLKpjX_tXqtEQ/exec",
-
-  folderId:
-    "1JfMshA_FjBRifRRqci0E-jZaoLhESWNl",
-
-  categoriesFolderId:
-    "1JfMshA_FjBRifRRqci0E-jZaoLhESWNl",
-
-  /*
-   * يبقى مغلقًا حتى يصبح Apps Script متوافقًا
-   * بالكامل مع Database V3.
-   */
-  autoSync: false,
-};
-
-/* ============================================================
-   CONSTANTS
-   ============================================================ */
-
-const CONFIG_KEY =
-  "elites_google_sheets_config";
-
-const LAST_SYNC_KEY =
-  "elites_last_sync";
-
-const DATABASE_VERSION =
-  "3.0.0";
-
-/*
- * مهم جدًا:
- *
- * لا نسمح للمزامنة بإرسال بيانات إلى Apps Script
- * القديم أثناء مرحلة الانتقال.
- *
- * بعد تحديث Apps Script V3 سنغيّرها إلى true.
- */
-const V3_SYNC_ENABLED = true;
-
 /* ============================================================
    V3 DATABASE TABLES
    ============================================================ */
 
-const V3_TABLE_NAMES = [
+export const V3_TABLE_NAMES = [
   "products",
   "product_variants",
   "product_groups",
@@ -217,8 +117,165 @@ const V3_TABLE_NAMES = [
   "exchange_rates",
 ] as const;
 
-type V3TableName =
+export type V3TableName =
   (typeof V3_TABLE_NAMES)[number];
+
+/*
+ * يمكن استخدام هذا النوع عندما نريد إرسال
+ * تغييرات محددة فقط إلى Apps Script.
+ */
+export type V3ChangedTablesPayload = Partial<
+  Record<V3TableName, unknown[]>
+>;
+
+interface GoogleSheetsContextType {
+  config: GoogleSheetsConfig;
+
+  setConfig: React.Dispatch<
+    React.SetStateAction<GoogleSheetsConfig>
+  >;
+
+  isSyncing: boolean;
+
+  lastSync: string | null;
+
+  syncError: string | null;
+
+  /*
+   * Full Sync
+   *
+   * يرسل الجداول المحلية الموجودة إلى
+   * sync_all_tables.
+   *
+   * يستخدم كـ Full Sync / Recovery.
+   */
+  syncNow: () => Promise<boolean>;
+
+  /*
+   * Incremental Sync
+   *
+   * يمكن استدعاؤها هكذا:
+   *
+   * syncChangedTables(["products"])
+   *
+   * أو:
+   *
+   * syncChangedTables(["products", "product_images"])
+   *
+   * ويمكن أيضًا إرسال السجلات نفسها:
+   *
+   * syncChangedTables({
+   *   products: [product],
+   *   product_images: [image]
+   * })
+   */
+  syncChangedTables: (
+    tables?:
+      | V3TableName[]
+      | V3ChangedTablesPayload
+  ) => Promise<boolean>;
+
+  /*
+   * Full Pull
+   *
+   * يحمل جميع الجداول.
+   */
+  pullFromSheets: () => Promise<boolean>;
+
+  /*
+   * Selected Tables Pull
+   *
+   * يحمل جداول محددة فقط.
+   */
+  pullTables: (
+    tableNames: V3TableName[]
+  ) => Promise<boolean>;
+
+  createProductFolder: (
+    productName: string,
+    sku: string
+  ) => Promise<CreateProductFolderResult>;
+
+  uploadImageToDrive: (
+    base64Data: string,
+    fileName: string,
+    mimeType?: string,
+    targetType?: string,
+    folderId?: string
+  ) => Promise<UploadImageResult>;
+
+  uploadMediaToDrive: (
+    base64Data: string,
+    fileName: string,
+    mimeType: string,
+    targetType?: string,
+    folderId?: string
+  ) => Promise<UploadMediaResult>;
+
+  fetchFolderMedia: (
+    folderId: string
+  ) => Promise<FetchFolderMediaResult>;
+
+  fetchFolderImages: (
+    folderId: string
+  ) => Promise<FolderMediaFile[]>;
+
+  triggerSync: () => void;
+}
+
+/* ============================================================
+   DEFAULT CONFIG
+   ============================================================ */
+
+const DEFAULT_CONFIG: GoogleSheetsConfig = {
+  sheetId:
+    "1MtmMwC9bBrEgX-y2wqltuvwmIsPIt0vUdi0L03JesRU",
+
+  webhookUrl:
+    "https://script.google.com/macros/s/AKfycbw2bDPslbyuoZ-bhC2pIgLPJZglO2mum2IkSWl1hqYiwjwPCkvDeY4qUqLKpjX_tXqtEQ/exec",
+
+  folderId:
+    "1JfMshA_FjBRifRRqci0E-jZaoLhESWNl",
+
+  categoriesFolderId:
+    "1JfMshA_FjBRifRRqci0E-jZaoLhESWNl",
+
+  autoSync: false,
+};
+
+/* ============================================================
+   CONSTANTS
+   ============================================================ */
+
+const CONFIG_KEY =
+  "elites_google_sheets_config";
+
+const LAST_SYNC_KEY =
+  "elites_last_sync";
+
+/*
+ * يحتفظ بنسخة من آخر حالة تمت مزامنتها.
+ *
+ * يستخدم فقط للمساعدة في معرفة السجلات
+ * التي تغيرت عند استخدام syncChangedTables().
+ */
+const LAST_SYNC_SNAPSHOT_PREFIX =
+  "elites_v3_sync_snapshot_";
+
+const DATABASE_VERSION =
+  "3.0.0";
+
+/*
+ * تم تفعيل V3.
+ *
+ * يجب أن يكون Apps Script الحالي هو
+ * Apps Script V3 الذي يحتوي على:
+ *
+ * sync_changed_rows
+ * get_tables
+ * sync_all_tables
+ */
+const V3_SYNC_ENABLED = true;
 
 /* ============================================================
    LOCAL STORAGE HELPERS
@@ -268,10 +325,6 @@ function cleanObjectForStorage(
   value: unknown,
   depth = 0
 ): unknown {
-  /*
-   * Prevent circular/deep structures from
-   * consuming LocalStorage.
-   */
   if (depth > 8) {
     return null;
   }
@@ -299,8 +352,7 @@ function cleanObjectForStorage(
     }
 
     /*
-     * Additional protection against
-     * unexpectedly huge values.
+     * حماية إضافية من القيم الضخمة.
      */
     if (
       value.length >
@@ -354,8 +406,7 @@ function cleanObjectForStorage(
           key.toLowerCase();
 
         /*
-         * Binary/image payloads
-         * must never enter cache.
+         * لا نخزن البيانات الثنائية.
          */
         if (
           lowerKey === "image_data" ||
@@ -406,17 +457,6 @@ function cleanArrayForStorage(
    V3 LOCAL CACHE KEYS
    ============================================================ */
 
-/*
- * هذه ليست أسماء Google Sheets.
- *
- * هي فقط مفاتيح LocalStorage المحلية.
- *
- * كل مفتاح مرتبط بجدول V3 واحد.
- *
- * لا نستخدم مفاتيح الجداول القديمة المختلفة
- * كـ fallback، حتى لا نعيد إدخال بيانات Legacy
- * إلى بنية V3.
- */
 const LOCAL_V3_CACHE_KEYS:
   Partial<
     Record<
@@ -589,8 +629,9 @@ export const GoogleSheetsProvider:
                 ...parsed,
 
                 /*
-                 * لا نسمح لأي إعداد قديم
-                 * بتشغيل Auto Sync.
+                 * Auto Sync يبقى كما هو في الإعداد
+                 * ولكن لا نسمح لقيمة قديمة بتشغيله
+                 * أثناء التحول.
                  */
                 autoSync: false,
               };
@@ -624,6 +665,10 @@ export const GoogleSheetsProvider:
         string | null
       >(null);
 
+    /*
+     * يمنع تشغيل أكثر من عملية Sync
+     * في نفس اللحظة.
+     */
     const syncingRef =
       useRef(false);
 
@@ -695,7 +740,41 @@ export const GoogleSheetsProvider:
       );
 
     /* ========================================================
-       BUILD V3 PAYLOAD
+       SAVE LOCAL TABLE
+       ======================================================== */
+
+    const saveTable =
+      useCallback(
+        (
+          tableName: V3TableName,
+          data: unknown[]
+        ): boolean => {
+          const key =
+            LOCAL_V3_CACHE_KEYS[
+              tableName
+            ];
+
+          if (!key) {
+            return false;
+          }
+
+          const cleaned =
+            cleanArrayForStorage(
+              data
+            );
+
+          return safeSetLocalStorage(
+            key,
+            JSON.stringify(
+              cleaned
+            )
+          );
+        },
+        []
+      );
+
+    /* ========================================================
+       BUILD FULL V3 PAYLOAD
        ======================================================== */
 
     const buildV3TablesPayload =
@@ -718,11 +797,8 @@ export const GoogleSheetsProvider:
               );
 
             /*
-             * لا نرسل جدولًا فارغًا.
-             *
-             * هذا مهم جدًا لأننا لا نريد
-             * أن يتحول الجدول الفارغ إلى
-             * عملية حذف/مسح في backend.
+             * لا نرسل جدولًا فارغًا
+             * في Full Sync.
              */
             if (
               data.length >
@@ -742,36 +818,645 @@ export const GoogleSheetsProvider:
       }, [readTable]);
 
     /* ========================================================
-       SYNC NOW
+       SNAPSHOT HELPERS
+       ======================================================== */
+
+    const getSnapshotKey =
+      useCallback(
+        (
+          tableName: V3TableName
+        ) =>
+          `${LAST_SYNC_SNAPSHOT_PREFIX}${tableName}`,
+        []
+      );
+
+    const readSnapshot =
+      useCallback(
+        (
+          tableName: V3TableName
+        ): unknown[] => {
+          const key =
+            getSnapshotKey(
+              tableName
+            );
+
+          try {
+            const raw =
+              safeGetLocalStorage(
+                key
+              );
+
+            if (!raw) {
+              return [];
+            }
+
+            const parsed =
+              JSON.parse(
+                raw
+              );
+
+            return Array.isArray(
+              parsed
+            )
+              ? parsed
+              : [];
+          } catch {
+            return [];
+          }
+        },
+        [getSnapshotKey]
+      );
+
+    const saveSnapshot =
+      useCallback(
+        (
+          tableName: V3TableName,
+          data: unknown[]
+        ) => {
+          const key =
+            getSnapshotKey(
+              tableName
+            );
+
+          const cleaned =
+            cleanArrayForStorage(
+              data
+            );
+
+          safeSetLocalStorage(
+            key,
+            JSON.stringify(
+              cleaned
+            )
+          );
+        },
+        [getSnapshotKey]
+      );
+
+    /*
+     * ========================================================
+     * MERGE SNAPSHOT RECORDS
+     * ========================================================
+     *
+     * هذه الدالة مهمة جدًا في Incremental Sync.
+     *
+     * لا نستبدل Snapshot كامل الجدول بعد Sync.
+     *
+     * بل نحدث فقط السجلات التي أرسلناها ونجحت.
+     *
+     * مثال:
+     *
+     * Local:
+     * A
+     * B
+     * C
+     *
+     * Snapshot:
+     * A
+     * B
+     *
+     * أرسلنا C فقط.
+     *
+     * بعد النجاح:
+     * Snapshot = A B C
+     *
+     * أما لو كان هناك تغيير جديد في B أثناء العملية،
+     * فلا يتم اعتباره Synced بالخطأ.
+     * ========================================================
+     */
+
+    const mergeSnapshotRecords =
+      useCallback(
+        (
+          tableName: V3TableName,
+          syncedRecords: unknown[]
+        ) => {
+          if (
+            !Array.isArray(
+              syncedRecords
+            ) ||
+            syncedRecords.length ===
+              0
+          ) {
+            return;
+          }
+
+          const existingSnapshot =
+            readSnapshot(
+              tableName
+            );
+
+          const snapshotById =
+            new Map<
+              string,
+              unknown
+            >();
+
+          /*
+           * نحفظ السجلات الحالية الموجودة
+           * في Snapshot.
+           */
+          existingSnapshot.forEach(
+            (
+              record
+            ) => {
+              const id =
+                getRecordIdStatic(
+                  record
+                );
+
+              if (
+                id
+              ) {
+                snapshotById.set(
+                  id,
+                  record
+                );
+              }
+            }
+          );
+
+          /*
+           * نضيف/نحدث فقط السجلات التي
+           * نجحت مزامنتها.
+           */
+          syncedRecords.forEach(
+            (
+              record
+            ) => {
+              const id =
+                getRecordIdStatic(
+                  record
+                );
+
+              if (
+                id
+              ) {
+                snapshotById.set(
+                  id,
+                  record
+                );
+              }
+            }
+          );
+
+          /*
+           * السجلات التي لا تحتوي ID
+           * لا يمكن تتبعها بأمان.
+           *
+           * لذلك نضيفها فقط إذا لم تكن موجودة
+           * مطابقة بالفعل.
+           */
+          const recordsWithoutId =
+            existingSnapshot.filter(
+              (
+                record
+              ) =>
+                !getRecordIdStatic(
+                  record
+                )
+            );
+
+          syncedRecords.forEach(
+            (
+              record
+            ) => {
+              if (
+                !getRecordIdStatic(
+                  record
+                )
+              ) {
+                const serialized =
+                  stableSerializeStatic(
+                    record
+                  );
+
+                const exists =
+                  recordsWithoutId.some(
+                    (
+                      existing
+                    ) =>
+                      stableSerializeStatic(
+                        existing
+                      ) ===
+                      serialized
+                  );
+
+                if (
+                  !exists
+                ) {
+                  recordsWithoutId.push(
+                    record
+                  );
+                }
+              }
+            }
+          );
+
+          const merged =
+            Array.from(
+              snapshotById.values()
+            ).concat(
+              recordsWithoutId
+            );
+
+          saveSnapshot(
+            tableName,
+            merged
+          );
+        },
+        [readSnapshot, saveSnapshot]
+      );
+
+    /* ========================================================
+       STABLE RECORD COMPARISON
+       ======================================================== */
+
+    const stableSerialize =
+      useCallback(
+        (
+          value: unknown
+        ): string => {
+          try {
+            if (
+              value === null ||
+              value === undefined
+            ) {
+              return "";
+            }
+
+            if (
+              typeof value !==
+              "object"
+            ) {
+              return JSON.stringify(
+                value
+              );
+            }
+
+            if (
+              Array.isArray(
+                value
+              )
+            ) {
+              return `[${value
+                .map(
+                  (item) =>
+                    stableSerialize(
+                      item
+                    )
+                )
+                .join(",")}]`;
+            }
+
+            const object =
+              value as Record<
+                string,
+                unknown
+              >;
+
+            return `{${Object.keys(
+              object
+            )
+              .sort()
+              .map(
+                (key) =>
+                  `${JSON.stringify(
+                    key
+                  )}:${stableSerialize(
+                    object[key]
+                  )}`
+              )
+              .join(",")}}`;
+          } catch {
+            return JSON.stringify(
+              value
+            );
+          }
+        },
+        []
+      );
+
+    /* ========================================================
+       GET RECORD ID
+       ======================================================== */
+
+    const getRecordId =
+      useCallback(
+        (
+          record: unknown
+        ): string => {
+          if (
+            !record ||
+            typeof record !==
+              "object"
+          ) {
+            return "";
+          }
+
+          const item =
+            record as Record<
+              string,
+              unknown
+            >;
+
+          /*
+           * id هو المفتاح الأساسي
+           * في Database V3.
+           */
+          if (
+            item.id !==
+              undefined &&
+            item.id !== null
+          ) {
+            return String(
+              item.id
+            ).trim();
+          }
+
+          /*
+           * fallback في حال بعض البيانات
+           * القديمة لا تحتوي id.
+           */
+          const possibleKeys =
+            [
+              "product_id",
+              "variant_id",
+              "group_id",
+              "category_id",
+              "source_id",
+              "image_id",
+              "supplier_id",
+              "order_id",
+              "customer_id",
+              "payment_id",
+              "review_id",
+              "wishlist_id",
+              "media_id",
+              "currency_id",
+              "exchange_rate_id",
+              "notification_id",
+              "activity_id",
+              "entry_id",
+              "listing_id",
+              "message_id",
+              "warehouse_id",
+              "inventory_id",
+              "movement_id",
+              "fulfillment_id",
+              "return_id",
+              "shipping_id",
+              "commission_id",
+              "expense_id",
+              "tax_profile_id",
+              "channel_id",
+              "discount_id",
+            ];
+
+          for (
+            const key of possibleKeys
+          ) {
+            if (
+              item[key] !==
+                undefined &&
+              item[key] !== null &&
+              String(
+                item[key]
+              ).trim()
+            ) {
+              return String(
+                item[key]
+              ).trim();
+            }
+          }
+
+          return "";
+        },
+        []
+      );
+
+    /*
+     * نحتاج هذه النسخ خارج React callbacks
+     * داخل mergeSnapshotRecords.
+     *
+     * يتم تعريفها كدوال ثابتة أسفل الملف أيضًا.
+     */
+
+    /* ========================================================
+       CALCULATE CHANGED RECORDS
+       ======================================================== */
+
+    const calculateChangedRecords =
+      useCallback(
+        (
+          tableName: V3TableName,
+          currentRecords: unknown[]
+        ): unknown[] => {
+          /*
+           * إذا لم توجد Snapshot سابقة،
+           * فهذا أول Sync للجدول.
+           *
+           * في هذه الحالة نرسل الجدول كاملًا
+           * مرة واحدة فقط.
+           */
+          const previousRecords =
+            readSnapshot(
+              tableName
+            );
+
+          if (
+            previousRecords.length ===
+            0
+          ) {
+            return currentRecords;
+          }
+
+          const previousById =
+            new Map<
+              string,
+              string
+            >();
+
+          previousRecords.forEach(
+            (
+              record
+            ) => {
+              const id =
+                getRecordId(
+                  record
+                );
+
+              if (
+                id
+              ) {
+                previousById.set(
+                  id,
+                  stableSerialize(
+                    record
+                  )
+                );
+              }
+            }
+          );
+
+          return currentRecords.filter(
+            (
+              record
+            ) => {
+              const id =
+                getRecordId(
+                  record
+                );
+
+              /*
+               * إذا لم يوجد ID،
+               * لا نستطيع معرفة هل تغير السجل،
+               * لذلك نرسله.
+               */
+              if (!id) {
+                return true;
+              }
+
+              const currentSerialized =
+                stableSerialize(
+                  record
+                );
+
+              const previousSerialized =
+                previousById.get(
+                  id
+                );
+
+              return (
+                previousSerialized !==
+                currentSerialized
+              );
+            }
+          );
+        },
+        [
+          getRecordId,
+          readSnapshot,
+          stableSerialize,
+        ]
+      );
+
+    /* ========================================================
+       COMMON RESPONSE PARSER
+       ======================================================== */
+
+    const parseApiResponse =
+      useCallback(
+        async (
+          response: Response,
+          operationName: string
+        ): Promise<any> => {
+          if (
+            !response.ok
+          ) {
+            throw new Error(
+              `HTTP ${response.status} أثناء ${operationName}`
+            );
+          }
+
+          const text =
+            await response.text();
+
+          if (!text) {
+            throw new Error(
+              `Google Apps Script أعاد استجابة فارغة أثناء ${operationName}.`
+            );
+          }
+
+          let result: any;
+
+          try {
+            result =
+              JSON.parse(
+                text
+              );
+          } catch {
+            console.error(
+              `Invalid Apps Script response during ${operationName}:`,
+              text
+            );
+
+            throw new Error(
+              `استجابة Google Apps Script أثناء ${operationName} ليست JSON صحيحة.`
+            );
+          }
+
+          if (
+            result.success === false ||
+            result.status ===
+              "error"
+          ) {
+            throw new Error(
+              result.message ||
+                result.error ||
+                `فشلت عملية ${operationName}.`
+            );
+          }
+
+          if (
+            result.schemaVersion &&
+            result.schemaVersion !==
+              DATABASE_VERSION
+          ) {
+            throw new Error(
+              `إصدار قاعدة البيانات غير متطابق. المتوقع ${DATABASE_VERSION}، والمستلم ${result.schemaVersion}.`
+            );
+          }
+
+          return result;
+        },
+        []
+      );
+
+    /* ========================================================
+       UPDATE SYNC MARKER
+       ======================================================== */
+
+    const markSyncSuccess =
+      useCallback(
+        () => {
+          const now =
+            new Date().toISOString();
+
+          setLastSync(
+            now
+          );
+
+          safeSetLocalStorage(
+            LAST_SYNC_KEY,
+            now
+          );
+        },
+        []
+      );
+
+    /* ========================================================
+       SYNC NOW — FULL SYNC
        ======================================================== */
 
     const syncNow =
       useCallback(
         async (): Promise<boolean> => {
-          /*
-           * حماية من الضغط المتكرر.
-           */
           if (
             syncingRef.current
           ) {
+            console.warn(
+              "Google Sheets Full Sync: توجد عملية مزامنة أخرى قيد التنفيذ."
+            );
+
             return false;
           }
 
-          /*
-           * V3 backend غير مفعّل بعد.
-           *
-           * نرفض المزامنة بدل إرسال payload
-           * إلى Apps Script القديم.
-           */
           if (
             !V3_SYNC_ENABLED
           ) {
             const message =
-              "مزامنة Google Sheets V3 متوقفة مؤقتًا حتى يتم تحديث Apps Script إلى API V3.";
-
-            console.info(
-              message
-            );
+              "مزامنة Google Sheets V3 غير مفعلة.";
 
             setSyncError(
               message
@@ -818,8 +1503,10 @@ export const GoogleSheetsProvider:
               0
             ) {
               console.info(
-                "Google Sheets V3: لا توجد بيانات محلية جاهزة للمزامنة."
+                "Google Sheets V3 Full Sync: لا توجد بيانات محلية."
               );
+
+              markSyncSuccess();
 
               return true;
             }
@@ -838,14 +1525,10 @@ export const GoogleSheetsProvider:
             };
 
             console.log(
-              "Google Sheets V3 sync:",
+              "Google Sheets V3 FULL SYNC:",
               {
-                schemaVersion:
-                  DATABASE_VERSION,
-
                 tables:
                   tableNames,
-
                 count:
                   tableNames.length,
               }
@@ -870,72 +1553,53 @@ export const GoogleSheetsProvider:
                 }
               );
 
-            if (
-              !response.ok
-            ) {
-              throw new Error(
-                `HTTP ${response.status}`
-              );
-            }
+            await parseApiResponse(
+              response,
+              "Full Sync"
+            );
 
-            let result:
-              any = null;
+            /*
+             * Full Sync نجح.
+             *
+             * هنا فقط نحدث Snapshot الكامل
+             * للجداول التي أرسلناها.
+             */
+            tableNames.forEach(
+              (
+                tableName
+              ) => {
+                const typedName =
+                  tableName as V3TableName;
+
+                const data =
+                  tables[
+                    typedName
+                  ];
+
+                if (
+                  Array.isArray(
+                    data
+                  )
+                ) {
+                  saveSnapshot(
+                    typedName,
+                    data
+                  );
+                }
+              }
+            );
+
+            markSyncSuccess();
 
             try {
-              const text =
-                await response.text();
-
-              if (
-                text
-              ) {
-                result =
-                  JSON.parse(
-                    text
-                  );
-              }
+              window.dispatchEvent(
+                new Event(
+                  "elites_data_synced"
+                )
+              );
             } catch {
-              /*
-               * لا نعتمد على parsing
-               * إذا كان الرد غير قابل للقراءة.
-               */
+              // Ignore event errors.
             }
-
-            if (
-              result &&
-              (
-                result.success === false ||
-                result.status === "error"
-              )
-            ) {
-              throw new Error(
-                result.message ||
-                  result.error ||
-                  "فشلت مزامنة Google Sheets."
-              );
-            }
-
-            if (
-              result &&
-              result.schemaVersion &&
-              result.schemaVersion !==
-                DATABASE_VERSION
-            ) {
-              throw new Error(
-                `إصدار قاعدة البيانات غير متطابق. المتوقع ${DATABASE_VERSION}، والمستلم ${result.schemaVersion}.`
-              );
-            }
-
-            const now =
-              new Date().toISOString();
-
-            setLastSync(
-              now
-            );
-
-            safeSetLocalStorage(
-              LAST_SYNC_KEY,
-              now
-            );
 
             return true;
           } catch (
@@ -950,7 +1614,7 @@ export const GoogleSheetsProvider:
                   );
 
             console.error(
-              "Google Sheets V3 sync error:",
+              "Google Sheets V3 FULL SYNC error:",
               error
             );
 
@@ -969,8 +1633,440 @@ export const GoogleSheetsProvider:
           }
         },
         [
-          config.webhookUrl,
           buildV3TablesPayload,
+          config.webhookUrl,
+          markSyncSuccess,
+          parseApiResponse,
+          saveSnapshot,
+        ]
+      );
+
+    /* ========================================================
+       INCREMENTAL SYNC
+       ======================================================== */
+
+    const syncChangedTables =
+      useCallback(
+        async (
+          requestedTables?:
+            | V3TableName[]
+            | V3ChangedTablesPayload
+        ): Promise<boolean> => {
+          if (
+            syncingRef.current
+          ) {
+            console.warn(
+              "Google Sheets Incremental Sync: توجد عملية مزامنة أخرى قيد التنفيذ."
+            );
+
+            return false;
+          }
+
+          if (
+            !V3_SYNC_ENABLED
+          ) {
+            setSyncError(
+              "مزامنة Google Sheets V3 غير مفعلة."
+            );
+
+            return false;
+          }
+
+          if (
+            !config.webhookUrl
+          ) {
+            setSyncError(
+              "رابط Google Apps Script غير موجود."
+            );
+
+            return false;
+          }
+
+          syncingRef.current =
+            true;
+
+          setIsSyncing(
+            true
+          );
+
+          setSyncError(
+            null
+          );
+
+          try {
+            const tables:
+              V3ChangedTablesPayload =
+              {};
+
+            /*
+             * ==================================================
+             * MODE 1
+             *
+             * syncChangedTables(["products"])
+             *
+             * نقرأ الجدول المحلي ونحسب فقط
+             * السجلات التي تغيرت منذ آخر Sync.
+             * ==================================================
+             */
+
+            if (
+              Array.isArray(
+                requestedTables
+              )
+            ) {
+              requestedTables.forEach(
+                (
+                  tableName
+                ) => {
+                  if (
+                    !V3_TABLE_NAMES.includes(
+                      tableName
+                    )
+                  ) {
+                    throw new Error(
+                      `جدول V3 غير معروف: ${tableName}`
+                    );
+                  }
+
+                  const current =
+                    readTable(
+                      tableName
+                    );
+
+                  const changed =
+                    calculateChangedRecords(
+                      tableName,
+                      current
+                    );
+
+                  if (
+                    changed.length >
+                    0
+                  ) {
+                    tables[
+                      tableName
+                    ] =
+                      cleanArrayForStorage(
+                        changed
+                      );
+                  }
+                }
+              );
+            }
+
+            /*
+             * ==================================================
+             * MODE 2
+             *
+             * syncChangedTables({
+             *   products: [product]
+             * })
+             *
+             * نستخدم السجلات المرسلة مباشرة.
+             *
+             * هذا هو الوضع الأفضل من Contexts
+             * التي تعرف بالضبط ما الذي تغير.
+             * ==================================================
+             */
+
+            else if (
+              requestedTables &&
+              typeof requestedTables ===
+                "object"
+            ) {
+              Object.entries(
+                requestedTables
+              ).forEach(
+                ([
+                  tableName,
+                  records,
+                ]) => {
+                  if (
+                    !V3_TABLE_NAMES.includes(
+                      tableName as V3TableName
+                    )
+                  ) {
+                    throw new Error(
+                      `جدول V3 غير معروف: ${tableName}`
+                    );
+                  }
+
+                  if (
+                    !Array.isArray(
+                      records
+                    )
+                  ) {
+                    throw new Error(
+                      `بيانات الجدول ${tableName} يجب أن تكون Array.`
+                    );
+                  }
+
+                  if (
+                    records.length >
+                    0
+                  ) {
+                    tables[
+                      tableName as V3TableName
+                    ] =
+                      cleanArrayForStorage(
+                        records
+                      );
+                  }
+                }
+              );
+            }
+
+            /*
+             * ==================================================
+             * MODE 3
+             *
+             * syncChangedTables()
+             *
+             * نستخدم مجموعة الجداول اليومية
+             * ونحسب فقط السجلات التي تغيرت.
+             * ==================================================
+             */
+            else {
+              const defaultIncrementalTables:
+                V3TableName[] = [
+                "products",
+                "product_variants",
+                "product_groups",
+                "product_sources",
+                "product_images",
+                "price_history",
+                "inventory",
+                "inventory_movements",
+                "customers",
+                "orders",
+                "order_items",
+                "fulfillments",
+                "returns",
+                "shipping",
+                "payments",
+                "commissions",
+                "reviews",
+                "wishlists",
+                "notifications",
+                "activity_log",
+              ];
+
+              defaultIncrementalTables.forEach(
+                (
+                  tableName
+                ) => {
+                  const current =
+                    readTable(
+                      tableName
+                    );
+
+                  const changed =
+                    calculateChangedRecords(
+                      tableName,
+                      current
+                    );
+
+                  if (
+                    changed.length >
+                    0
+                  ) {
+                    tables[
+                      tableName
+                    ] =
+                      cleanArrayForStorage(
+                        changed
+                      );
+                  }
+                }
+              );
+            }
+
+            const tableNames =
+              Object.keys(
+                tables
+              );
+
+            /*
+             * لا يوجد شيء تغير.
+             *
+             * لا نرسل أي طلب إلى Google.
+             */
+            if (
+              tableNames.length ===
+              0
+            ) {
+              console.info(
+                "Google Sheets V3 Incremental Sync: لا توجد تغييرات."
+              );
+
+              markSyncSuccess();
+
+              return true;
+            }
+
+            const payload = {
+              action:
+                "sync_changed_rows",
+
+              schemaVersion:
+                DATABASE_VERSION,
+
+              timestamp:
+                new Date().toISOString(),
+
+              tables,
+            };
+
+            const totalRecords =
+              tableNames.reduce(
+                (
+                  total,
+                  tableName
+                ) =>
+                  total +
+                  (
+                    Array.isArray(
+                      tables[
+                        tableName as V3TableName
+                      ]
+                    )
+                      ? (
+                          tables[
+                            tableName as V3TableName
+                          ] as unknown[]
+                        ).length
+                      : 0
+                  ),
+                0
+              );
+
+            console.log(
+              "Google Sheets V3 INCREMENTAL SYNC:",
+              {
+                action:
+                  "sync_changed_rows",
+
+                tables:
+                  tableNames,
+
+                records:
+                  totalRecords,
+              }
+            );
+
+            const response =
+              await fetch(
+                config.webhookUrl,
+                {
+                  method:
+                    "POST",
+
+                  headers: {
+                    "Content-Type":
+                      "text/plain;charset=utf-8",
+                  },
+
+                  body:
+                    JSON.stringify(
+                      payload
+                    ),
+                }
+              );
+
+            await parseApiResponse(
+              response,
+              "Incremental Sync"
+            );
+
+            /*
+             * ==================================================
+             * مهم جدًا:
+             *
+             * لا نأخذ الجدول المحلي كاملًا هنا.
+             *
+             * نحدث Snapshot فقط بالسجلات التي
+             * أرسلناها ونجحت.
+             *
+             * هذا يمنع اعتبار تغييرات أخرى
+             * غير مرسلة بأنها Synced.
+             * ==================================================
+             */
+
+            tableNames.forEach(
+              (
+                tableName
+              ) => {
+                const typedName =
+                  tableName as V3TableName;
+
+                const syncedRecords =
+                  tables[
+                    typedName
+                  ];
+
+                if (
+                  Array.isArray(
+                    syncedRecords
+                  )
+                ) {
+                  mergeSnapshotRecords(
+                    typedName,
+                    syncedRecords
+                  );
+                }
+              }
+            );
+
+            markSyncSuccess();
+
+            try {
+              window.dispatchEvent(
+                new Event(
+                  "elites_data_synced"
+                )
+              );
+            } catch {
+              // Ignore event errors.
+            }
+
+            return true;
+          } catch (
+            error
+          ) {
+            const message =
+              error instanceof
+              Error
+                ? error.message
+                : String(
+                    error
+                  );
+
+            console.error(
+              "Google Sheets V3 Incremental Sync error:",
+              error
+            );
+
+            setSyncError(
+              message
+            );
+
+            return false;
+          } finally {
+            syncingRef.current =
+              false;
+
+            setIsSyncing(
+              false
+            );
+          }
+        },
+        [
+          calculateChangedRecords,
+          config.webhookUrl,
+          markSyncSuccess,
+          mergeSnapshotRecords,
+          parseApiResponse,
+          readTable,
         ]
       );
 
@@ -1043,58 +2139,11 @@ export const GoogleSheetsProvider:
                 }
               );
 
-            if (
-              !response.ok
-            ) {
-              throw new Error(
-                `HTTP ${response.status}`
+            const result =
+              await parseApiResponse(
+                response,
+                "إنشاء مجلد المنتج"
               );
-            }
-
-            const text =
-              await response.text();
-
-            if (
-              !text
-            ) {
-              throw new Error(
-                "Google Apps Script أعاد استجابة فارغة."
-              );
-            }
-
-            let result:
-              any;
-
-            try {
-              result =
-                JSON.parse(
-                  text
-                );
-            } catch {
-              console.error(
-                "Invalid Apps Script response:",
-                text
-              );
-
-              throw new Error(
-                "استجابة Google Apps Script ليست JSON صحيحة."
-              );
-            }
-
-            if (
-              result.status !==
-              "success"
-            ) {
-              return {
-                success:
-                  false,
-
-                error:
-                  result.message ||
-                  result.error ||
-                  "فشل إنشاء مجلد المنتج.",
-              };
-            }
 
             if (
               !result.folderId
@@ -1143,7 +2192,10 @@ export const GoogleSheetsProvider:
             };
           }
         },
-        [config.webhookUrl]
+        [
+          config.webhookUrl,
+          parseApiResponse,
+        ]
       );
 
     /* ========================================================
@@ -1261,62 +2313,12 @@ export const GoogleSheetsProvider:
                 }
               );
 
-            if (
-              !response.ok
-            ) {
-              throw new Error(
-                `HTTP ${response.status}`
-              );
-            }
-
-            const text =
-              await response.text();
-
-            if (
-              !text
-            ) {
-              throw new Error(
-                "Google Apps Script أعاد استجابة فارغة أثناء رفع الصورة."
-              );
-            }
-
-            let result:
-              any;
-
-            try {
-              result =
-                JSON.parse(
-                  text
-                );
-            } catch {
-              console.error(
-                "Invalid Apps Script upload response:",
-                text
+            const result =
+              await parseApiResponse(
+                response,
+                "رفع الصورة"
               );
 
-              throw new Error(
-                "استجابة Google Apps Script أثناء رفع الصورة ليست JSON صحيحة."
-              );
-            }
-
-            if (
-              result.success === false ||
-              result.status === "error"
-            ) {
-              return {
-                success:
-                  false,
-
-                error:
-                  result.message ||
-                  result.error ||
-                  "فشل رفع الصورة إلى Google Drive.",
-              };
-            }
-
-            /*
-             * لا نقبل نجاحًا بدون fileId حقيقي.
-             */
             const fileId =
               result.fileId ||
               extractGoogleDriveId(
@@ -1345,12 +2347,7 @@ export const GoogleSheetsProvider:
             }
 
             /*
-             * مهم:
-             *
-             * لا نستخدم result.directUrl
-             * لأن Apps Script قد يعيد رابط download.
-             *
-             * نبني رابط الصورة مباشرة من File ID.
+             * نبني الرابط من fileId الحقيقي.
              */
             const directUrl =
               formatGoogleDriveDirectUrl(
@@ -1364,9 +2361,7 @@ export const GoogleSheetsProvider:
               `https://drive.google.com/file/d/${fileId}/view`;
 
             /*
-             * Preview cache في sessionStorage فقط.
-             *
-             * لا يدخل إلى LocalStorage.
+             * Cache مؤقت للصورة.
              */
             try {
               cacheDriveImagePreview(
@@ -1431,7 +2426,10 @@ export const GoogleSheetsProvider:
             };
           }
         },
-        [config.webhookUrl]
+        [
+          config.webhookUrl,
+          parseApiResponse,
+        ]
       );
 
     /* ========================================================
@@ -1448,17 +2446,25 @@ export const GoogleSheetsProvider:
           folderId?: string
         ): Promise<UploadMediaResult> => {
           try {
-            if (!config.webhookUrl) {
+            if (
+              !config.webhookUrl
+            ) {
               return {
-                success: false,
+                success:
+                  false,
+
                 error:
                   "رابط Google Apps Script غير موجود.",
               };
             }
 
-            if (!base64Data) {
+            if (
+              !base64Data
+            ) {
               return {
-                success: false,
+                success:
+                  false,
+
                 error:
                   "بيانات الملف فارغة.",
               };
@@ -1470,32 +2476,43 @@ export const GoogleSheetsProvider:
               )
             ) {
               return {
-                success: false,
+                success:
+                  false,
+
                 error:
                   "بيانات الملف ليست Data URL صالحة.",
               };
             }
 
             if (
-              !mimeType.startsWith("image/") &&
-              !mimeType.startsWith("video/")
+              !mimeType.startsWith(
+                "image/"
+              ) &&
+              !mimeType.startsWith(
+                "video/"
+              )
             ) {
               return {
-                success: false,
+                success:
+                  false,
+
                 error:
                   "نوع الملف غير مدعوم. يسمح فقط بالصور والفيديو.",
               };
             }
 
             const mediaType =
-              mimeType.startsWith("video/")
+              mimeType.startsWith(
+                "video/"
+              )
                 ? "video"
                 : "image";
 
-            const payload: Record<
-              string,
-              unknown
-            > = {
+            const payload:
+              Record<
+                string,
+                unknown
+              > = {
               action:
                 "upload_media_to_drive",
 
@@ -1504,7 +2521,8 @@ export const GoogleSheetsProvider:
               fileName:
                 fileName ||
                 (
-                  mediaType === "video"
+                  mediaType ===
+                  "video"
                     ? "product-video.mp4"
                     : "product-image.jpg"
                 ),
@@ -1512,12 +2530,15 @@ export const GoogleSheetsProvider:
               mimeType,
 
               targetType:
-                targetType || "product",
+                targetType ||
+                "product",
 
               mediaType,
             };
 
-            if (folderId) {
+            if (
+              folderId
+            ) {
               payload.folderId =
                 folderId;
             }
@@ -1538,7 +2559,8 @@ export const GoogleSheetsProvider:
               await fetch(
                 config.webhookUrl,
                 {
-                  method: "POST",
+                  method:
+                    "POST",
 
                   headers: {
                     "Content-Type":
@@ -1552,44 +2574,11 @@ export const GoogleSheetsProvider:
                 }
               );
 
-            if (!response.ok) {
-              throw new Error(
-                `HTTP ${response.status}`
+            const result =
+              await parseApiResponse(
+                response,
+                "رفع الوسائط"
               );
-            }
-
-            const text =
-              await response.text();
-
-            if (!text) {
-              throw new Error(
-                "Google Apps Script أعاد استجابة فارغة."
-              );
-            }
-
-            let result: any;
-
-            try {
-              result =
-                JSON.parse(text);
-            } catch {
-              throw new Error(
-                "استجابة Google Apps Script ليست JSON صحيحة."
-              );
-            }
-
-            if (
-              result.success === false ||
-              result.status === "error"
-            ) {
-              return {
-                success: false,
-                error:
-                  result.message ||
-                  result.error ||
-                  "فشل رفع الملف إلى Google Drive.",
-              };
-            }
 
             const fileId =
               result.fileId ||
@@ -1601,17 +2590,24 @@ export const GoogleSheetsProvider:
                   ""
               );
 
-            if (!fileId) {
+            if (
+              !fileId
+            ) {
               return {
-                success: false,
+                success:
+                  false,
+
                 error:
                   "لم يُرجع Google Drive fileId حقيقيًا.",
               };
             }
 
             const directUrl =
-              mediaType === "image"
-                ? formatGoogleDriveDirectUrl(fileId)
+              mediaType ===
+              "image"
+                ? formatGoogleDriveDirectUrl(
+                    fileId
+                  )
                 : (
                     result.viewUrl ||
                     `https://drive.google.com/file/d/${fileId}/view`
@@ -1627,11 +2623,10 @@ export const GoogleSheetsProvider:
 
             /*
              * Cache للصور فقط.
-             *
-             * لا نخزن فيديوهات Base64 في sessionStorage.
              */
             if (
-              mediaType === "image"
+              mediaType ===
+              "image"
             ) {
               try {
                 cacheDriveImagePreview(
@@ -1649,7 +2644,8 @@ export const GoogleSheetsProvider:
             }
 
             return {
-              success: true,
+              success:
+                true,
 
               fileId,
 
@@ -1676,22 +2672,32 @@ export const GoogleSheetsProvider:
 
               mediaType,
             };
-          } catch (error) {
+          } catch (
+            error
+          ) {
             console.error(
               "uploadMediaToDrive error:",
               error
             );
 
             return {
-              success: false,
+              success:
+                false,
+
               error:
-                error instanceof Error
+                error instanceof
+                Error
                   ? error.message
-                  : String(error),
+                  : String(
+                      error
+                    ),
             };
           }
         },
-        [config.webhookUrl]
+        [
+          config.webhookUrl,
+          parseApiResponse,
+        ]
       );
 
     /* ========================================================
@@ -1703,26 +2709,38 @@ export const GoogleSheetsProvider:
         async (
           folderId: string
         ): Promise<FetchFolderMediaResult> => {
-          const emptyResult: FetchFolderMediaResult = {
-            success: false,
+          const emptyResult:
+            FetchFolderMediaResult = {
+            success:
+              false,
+
             folderId,
+
             files: [],
+
             media: [],
+
             images: [],
           };
 
           try {
-            if (!folderId) {
+            if (
+              !folderId
+            ) {
               return {
                 ...emptyResult,
+
                 error:
                   "معرف مجلد Google Drive غير موجود.",
               };
             }
 
-            if (!config.webhookUrl) {
+            if (
+              !config.webhookUrl
+            ) {
               return {
                 ...emptyResult,
+
                 error:
                   "رابط Google Apps Script غير موجود.",
               };
@@ -1732,63 +2750,29 @@ export const GoogleSheetsProvider:
               await fetch(
                 config.webhookUrl,
                 {
-                  method: "POST",
+                  method:
+                    "POST",
 
                   headers: {
                     "Content-Type":
                       "text/plain;charset=utf-8",
                   },
 
-                  body: JSON.stringify({
-                    action:
-                      "fetch_folder_media",
+                  body:
+                    JSON.stringify({
+                      action:
+                        "fetch_folder_media",
 
-                    folderId,
-                  }),
+                      folderId,
+                    }),
                 }
               );
 
-            if (!response.ok) {
-              throw new Error(
-                `HTTP ${response.status}`
+            const result =
+              await parseApiResponse(
+                response,
+                "جلب وسائط مجلد Google Drive"
               );
-            }
-
-            const text =
-              await response.text();
-
-            if (!text) {
-              throw new Error(
-                "Google Apps Script أعاد استجابة فارغة."
-              );
-            }
-
-            let result: any;
-
-            try {
-              result =
-                JSON.parse(text);
-            } catch {
-              console.error(
-                "Invalid fetchFolderMedia response:",
-                text
-              );
-
-              throw new Error(
-                "استجابة Google Apps Script ليست JSON صحيحة."
-              );
-            }
-
-            if (
-              result.success === false ||
-              result.status === "error"
-            ) {
-              throw new Error(
-                result.message ||
-                  result.error ||
-                  "فشل جلب وسائط مجلد Google Drive."
-              );
-            }
 
             /*
              * Apps Script V3 يعيد:
@@ -1796,17 +2780,20 @@ export const GoogleSheetsProvider:
              * files
              * media
              * images
-             *
-             * نستخدم files كمصدر رئيسي.
              */
             const rawFiles =
-              Array.isArray(result.files)
+              Array.isArray(
+                result.files
+              )
                 ? result.files
-                : Array.isArray(result.media)
+                : Array.isArray(
+                    result.media
+                  )
                 ? result.media
                 : [];
 
-            const files: FolderMediaFile[] =
+            const files:
+              FolderMediaFile[] =
               rawFiles
                 .map(
                   (
@@ -1838,7 +2825,9 @@ export const GoogleSheetsProvider:
                           ""
                       );
 
-                    if (!fileId) {
+                    if (
+                      !fileId
+                    ) {
                       return null;
                     }
 
@@ -1868,7 +2857,9 @@ export const GoogleSheetsProvider:
                         `https://drive.google.com/uc?export=view&id=${fileId}`,
 
                       directUrl:
-                        formatGoogleDriveDirectUrl(fileId),
+                        formatGoogleDriveDirectUrl(
+                          fileId
+                        ),
                     };
                   }
                 )
@@ -1881,7 +2872,9 @@ export const GoogleSheetsProvider:
 
             const images =
               files.filter(
-                (file) =>
+                (
+                  file
+                ) =>
                   file.mediaType ===
                   "image"
               );
@@ -1904,7 +2897,9 @@ export const GoogleSheetsProvider:
 
                 videos:
                   files.filter(
-                    (file) =>
+                    (
+                      file
+                    ) =>
                       file.mediaType ===
                       "video"
                   ).length,
@@ -1912,7 +2907,8 @@ export const GoogleSheetsProvider:
             );
 
             return {
-              success: true,
+              success:
+                true,
 
               folderId:
                 result.folderId ||
@@ -1923,7 +2919,8 @@ export const GoogleSheetsProvider:
 
               files,
 
-              media: files,
+              media:
+                files,
 
               images,
             };
@@ -1939,13 +2936,19 @@ export const GoogleSheetsProvider:
               ...emptyResult,
 
               error:
-                error instanceof Error
+                error instanceof
+                Error
                   ? error.message
-                  : String(error),
+                  : String(
+                      error
+                    ),
             };
           }
         },
-        [config.webhookUrl]
+        [
+          config.webhookUrl,
+          parseApiResponse,
+        ]
       );
 
     /* ========================================================
@@ -1956,40 +2959,140 @@ export const GoogleSheetsProvider:
       useCallback(
         async (
           folderId: string
-        ): Promise<FolderMediaFile[]> => {
+        ): Promise<
+          FolderMediaFile[]
+        > => {
           const result =
             await fetchFolderMedia(
               folderId
             );
 
-          /*
-           * هذه الدالة القديمة تعيد الصور فقط.
-           *
-           * أي مكون قديم ما زال يستخدم
-           * fetchFolderImages لن ينكسر.
-           */
-          return result.images || [];
+          return (
+            result.images ||
+            []
+          );
         },
-        [fetchFolderMedia]
+        [
+          fetchFolderMedia,
+        ]
       );
 
     /* ========================================================
-       PULL FROM SHEETS
+       APPLY PULLED TABLES TO LOCAL CACHE
        ======================================================== */
 
-    const pullFromSheets =
+    const applyPulledTables =
       useCallback(
-        async (): Promise<boolean> => {
+        (
+          tables: any
+        ): {
+          savedTables: number;
+          savedRecords: number;
+        } => {
+          if (
+            !tables ||
+            typeof tables !==
+              "object"
+          ) {
+            throw new Error(
+              "لم يتم العثور على جداول V3 في استجابة Google Sheets."
+            );
+          }
+
+          let savedTables =
+            0;
+
+          let savedRecords =
+            0;
+
+          V3_TABLE_NAMES.forEach(
+            (
+              tableName
+            ) => {
+              const tableData =
+                tables[
+                  tableName
+                ];
+
+              /*
+               * إذا لم يرسل backend الجدول،
+               * لا نلمس الكاش المحلي.
+               */
+              if (
+                !Array.isArray(
+                  tableData
+                )
+              ) {
+                return;
+              }
+
+              const cleaned =
+                cleanArrayForStorage(
+                  tableData
+                );
+
+              const saved =
+                saveTable(
+                  tableName,
+                  cleaned
+                );
+
+              if (!saved) {
+                throw new Error(
+                  `تعذر حفظ جدول ${tableName} في LocalStorage.`
+                );
+              }
+
+              /*
+               * بعد Pull ناجح، تصبح البيانات
+               * الحالية هي Snapshot المرجعية.
+               */
+              saveSnapshot(
+                tableName,
+                cleaned
+              );
+
+              savedTables++;
+
+              savedRecords +=
+                cleaned.length;
+            }
+          );
+
+          return {
+            savedTables,
+            savedRecords,
+          };
+        },
+        [
+          saveSnapshot,
+          saveTable,
+        ]
+      );
+
+    /* ========================================================
+       PULL SELECTED TABLES
+       ======================================================== */
+
+    const pullTables =
+      useCallback(
+        async (
+          tableNames: V3TableName[]
+        ): Promise<boolean> => {
           try {
-            if (!V3_SYNC_ENABLED) {
-              console.info(
-                "Google Sheets V3: القراءة غير مفعلة."
+            if (
+              !V3_SYNC_ENABLED
+            ) {
+              setSyncError(
+                "قراءة Google Sheets V3 غير مفعلة."
               );
 
               return false;
             }
 
-            if (!config.webhookUrl) {
+            if (
+              !config.webhookUrl
+            ) {
               setSyncError(
                 "رابط Google Apps Script غير موجود."
               );
@@ -1997,179 +3100,97 @@ export const GoogleSheetsProvider:
               return false;
             }
 
-            setSyncError(null);
+            if (
+              !Array.isArray(
+                tableNames
+              ) ||
+              tableNames.length ===
+                0
+            ) {
+              return true;
+            }
 
-            console.log(
-              "Google Sheets V3: بدء تحميل البيانات من Sheets..."
+            const uniqueTables =
+              Array.from(
+                new Set(
+                  tableNames
+                )
+              );
+
+            uniqueTables.forEach(
+              (
+                tableName
+              ) => {
+                if (
+                  !V3_TABLE_NAMES.includes(
+                    tableName
+                  )
+                ) {
+                  throw new Error(
+                    `جدول V3 غير معروف: ${tableName}`
+                  );
+                }
+              }
+            );
+
+            setSyncError(
+              null
+            );
+
+            const params =
+              new URLSearchParams();
+
+            params.set(
+              "action",
+              "get_tables"
+            );
+
+            params.set(
+              "tables",
+              uniqueTables.join(
+                ","
+              )
             );
 
             const url =
-              `${config.webhookUrl}?action=get_all_tables`;
+              `${config.webhookUrl}?${params.toString()}`;
+
+            console.log(
+              "Google Sheets V3: Pull selected tables:",
+              uniqueTables
+            );
 
             const response =
-              await fetch(url, {
-                method: "GET",
-              });
-
-            if (!response.ok) {
-              throw new Error(
-                `HTTP ${response.status}`
-              );
-            }
-
-            const text =
-              await response.text();
-
-            if (!text) {
-              throw new Error(
-                "Google Apps Script أعاد استجابة فارغة."
-              );
-            }
-
-            let result: any;
-
-            try {
-              result =
-                JSON.parse(text);
-            } catch {
-              console.error(
-                "Invalid Google Sheets V3 response:",
-                text
+              await fetch(
+                url,
+                {
+                  method:
+                    "GET",
+                }
               );
 
-              throw new Error(
-                "استجابة Google Sheets V3 ليست JSON صحيحة."
+            const result =
+              await parseApiResponse(
+                response,
+                "تحميل الجداول المحددة"
               );
-            }
 
-            /*
-             * التحقق من نجاح API.
-             */
-            if (
-              result.success === false ||
-              result.status === "error"
-            ) {
-              throw new Error(
-                result.message ||
-                  result.error ||
-                  "فشل تحميل البيانات من Google Sheets."
-              );
-            }
-
-            /*
-             * التحقق من إصدار قاعدة البيانات.
-             */
-            if (
-              result.schemaVersion &&
-              result.schemaVersion !==
-                DATABASE_VERSION
-            ) {
-              throw new Error(
-                `إصدار قاعدة البيانات غير متطابق. المتوقع ${DATABASE_VERSION}، والمستلم ${result.schemaVersion}.`
-              );
-            }
-
-            /*
-             * بعض نسخ API قد تضع tables مباشرة،
-             * وبعضها قد تضعها داخل data.
-             */
             const tables =
               result.tables ||
               result.data?.tables;
 
-            if (
-              !tables ||
-              typeof tables !== "object"
-            ) {
-              throw new Error(
-                "لم يتم العثور على جداول V3 في استجابة Google Sheets."
+            const summary =
+              applyPulledTables(
+                tables
               );
-            }
 
-            let savedTables = 0;
-            let savedRecords = 0;
-
-            /*
-             * Google Sheets هو المصدر الرسمي للبيانات.
-             *
-             * لذلك نستبدل الكاش المحلي ببيانات Sheets.
-             */
-            V3_TABLE_NAMES.forEach(
-              (tableName) => {
-                const key =
-                  LOCAL_V3_CACHE_KEYS[
-                    tableName
-                  ];
-
-                if (!key) {
-                  return;
-                }
-
-                const tableData =
-                  tables[tableName];
-
-                /*
-                 * إذا كان الجدول موجودًا في الرد
-                 * نحفظه حتى لو كان فارغًا.
-                 *
-                 * هذا مهم لأن Sheets هو المصدر الرسمي.
-                 */
-                if (
-                  Array.isArray(
-                    tableData
-                  )
-                ) {
-                  const cleaned =
-                    cleanArrayForStorage(
-                      tableData
-                    );
-
-                  const saved =
-                    safeSetLocalStorage(
-                      key,
-                      JSON.stringify(
-                        cleaned
-                      )
-                    );
-
-                  if (!saved) {
-                    throw new Error(
-                      `تعذر حفظ جدول ${tableName} في LocalStorage.`
-                    );
-                  }
-
-                  savedTables++;
-                  savedRecords +=
-                    cleaned.length;
-                }
-              }
-            );
-
-            const now =
-              new Date().toISOString();
-
-            setLastSync(now);
-
-            safeSetLocalStorage(
-              LAST_SYNC_KEY,
-              now
-            );
+            markSyncSuccess();
 
             console.log(
-              "Google Sheets V3: تم تحميل البيانات بنجاح.",
-              {
-                tables:
-                  savedTables,
-
-                records:
-                  savedRecords,
-              }
+              "Google Sheets V3: تم تحميل الجداول المحددة:",
+              summary
             );
 
-            /*
-             * إبلاغ باقي التطبيق بأن البيانات
-             * المحلية تم تحديثها من Sheets.
-             */
             try {
               window.dispatchEvent(
                 new Event(
@@ -2181,16 +3202,19 @@ export const GoogleSheetsProvider:
             }
 
             return true;
-
-          } catch (error) {
-
+          } catch (
+            error
+          ) {
             const message =
-              error instanceof Error
+              error instanceof
+              Error
                 ? error.message
-                : String(error);
+                : String(
+                    error
+                  );
 
             console.error(
-              "Google Sheets V3 pull error:",
+              "Google Sheets V3 selected pull error:",
               error
             );
 
@@ -2201,7 +3225,124 @@ export const GoogleSheetsProvider:
             return false;
           }
         },
-        [config.webhookUrl]
+        [
+          applyPulledTables,
+          config.webhookUrl,
+          markSyncSuccess,
+          parseApiResponse,
+        ]
+      );
+
+    /* ========================================================
+       PULL FROM SHEETS — FULL PULL
+       ======================================================== */
+
+    const pullFromSheets =
+      useCallback(
+        async (): Promise<boolean> => {
+          try {
+            if (
+              !V3_SYNC_ENABLED
+            ) {
+              console.info(
+                "Google Sheets V3: القراءة غير مفعلة."
+              );
+
+              return false;
+            }
+
+            if (
+              !config.webhookUrl
+            ) {
+              setSyncError(
+                "رابط Google Apps Script غير موجود."
+              );
+
+              return false;
+            }
+
+            setSyncError(
+              null
+            );
+
+            console.log(
+              "Google Sheets V3: بدء Full Pull من Sheets..."
+            );
+
+            const url =
+              `${config.webhookUrl}?action=get_all_tables`;
+
+            const response =
+              await fetch(
+                url,
+                {
+                  method:
+                    "GET",
+                }
+              );
+
+            const result =
+              await parseApiResponse(
+                response,
+                "Full Pull"
+              );
+
+            const tables =
+              result.tables ||
+              result.data?.tables;
+
+            const summary =
+              applyPulledTables(
+                tables
+              );
+
+            markSyncSuccess();
+
+            console.log(
+              "Google Sheets V3: تم Full Pull بنجاح.",
+              summary
+            );
+
+            try {
+              window.dispatchEvent(
+                new Event(
+                  "elites_data_pulled"
+                )
+              );
+            } catch {
+              // Ignore event errors.
+            }
+
+            return true;
+          } catch (
+            error
+          ) {
+            const message =
+              error instanceof
+              Error
+                ? error.message
+                : String(
+                    error
+                  );
+
+            console.error(
+              "Google Sheets V3 FULL PULL error:",
+              error
+            );
+
+            setSyncError(
+              message
+            );
+
+            return false;
+          }
+        },
+        [
+          applyPulledTables,
+          config.webhookUrl,
+          markSyncSuccess,
+          parseApiResponse,
+        ]
       );
 
     /* ========================================================
@@ -2253,9 +3394,6 @@ export const GoogleSheetsProvider:
        ======================================================== */
 
     useEffect(() => {
-      /*
-       * Auto Sync يبقى مغلقًا أثناء بناء V3.
-       */
       if (
         !config.autoSync ||
         !V3_SYNC_ENABLED
@@ -2279,10 +3417,26 @@ export const GoogleSheetsProvider:
             );
           }
 
+          /*
+           * لم نعد نستعمل syncNow()
+           * هنا حتى لا نرسل Full Database.
+           *
+           * نستخدم Incremental Sync.
+           */
           timer =
             setTimeout(
               () => {
-                void syncNow();
+                void syncChangedTables(
+                  [
+                    "products",
+                    "product_variants",
+                    "product_sources",
+                    "product_images",
+                    "price_history",
+                    "inventory",
+                    "inventory_movements",
+                  ]
+                );
               },
               800
             );
@@ -2309,7 +3463,7 @@ export const GoogleSheetsProvider:
       };
     }, [
       config.autoSync,
-      syncNow,
+      syncChangedTables,
     ]);
 
     /* ========================================================
@@ -2324,13 +3478,19 @@ export const GoogleSheetsProvider:
             !V3_SYNC_ENABLED
           ) {
             console.info(
-              "Sync trigger ignored: V3 backend is not enabled yet."
+              "Sync trigger ignored."
             );
 
             return;
           }
 
-          void syncNow();
+          /*
+           * Trigger عام = Incremental
+           *
+           * Full Sync يبقى متاحًا مباشرة
+           * عبر syncNow().
+           */
+          void syncChangedTables();
         };
 
       window.addEventListener(
@@ -2346,7 +3506,7 @@ export const GoogleSheetsProvider:
       };
     }, [
       config.autoSync,
-      syncNow,
+      syncChangedTables,
     ]);
 
     /* ========================================================
@@ -2365,10 +3525,29 @@ export const GoogleSheetsProvider:
 
       syncError,
 
+      /*
+       * Full Sync
+       */
       syncNow,
 
+      /*
+       * Incremental Sync
+       */
+      syncChangedTables,
+
+      /*
+       * Full Pull
+       */
       pullFromSheets,
 
+      /*
+       * Selected Pull
+       */
+      pullTables,
+
+      /*
+       * Google Drive
+       */
       createProductFolder,
 
       uploadImageToDrive,
@@ -2390,6 +3569,153 @@ export const GoogleSheetsProvider:
       </GoogleSheetsContext.Provider>
     );
   };
+
+/* ============================================================
+   STATIC HELPERS FOR SNAPSHOT MERGING
+   ============================================================ */
+
+function getRecordIdStatic(
+  record: unknown
+): string {
+  if (
+    !record ||
+    typeof record !==
+      "object"
+  ) {
+    return "";
+  }
+
+  const item =
+    record as Record<
+      string,
+      unknown
+    >;
+
+  if (
+    item.id !==
+      undefined &&
+    item.id !== null
+  ) {
+    return String(
+      item.id
+    ).trim();
+  }
+
+  const possibleKeys =
+    [
+      "product_id",
+      "variant_id",
+      "group_id",
+      "category_id",
+      "source_id",
+      "image_id",
+      "supplier_id",
+      "order_id",
+      "customer_id",
+      "payment_id",
+      "review_id",
+      "wishlist_id",
+      "media_id",
+      "currency_id",
+      "exchange_rate_id",
+      "notification_id",
+      "activity_id",
+      "entry_id",
+      "listing_id",
+      "message_id",
+      "warehouse_id",
+      "inventory_id",
+      "movement_id",
+      "fulfillment_id",
+      "return_id",
+      "shipping_id",
+      "commission_id",
+      "expense_id",
+      "tax_profile_id",
+      "channel_id",
+      "discount_id",
+    ];
+
+  for (
+    const key of possibleKeys
+  ) {
+    if (
+      item[key] !==
+        undefined &&
+      item[key] !== null &&
+      String(
+        item[key]
+      ).trim()
+    ) {
+      return String(
+        item[key]
+      ).trim();
+    }
+  }
+
+  return "";
+}
+
+function stableSerializeStatic(
+  value: unknown
+): string {
+  try {
+    if (
+      value === null ||
+      value === undefined
+    ) {
+      return "";
+    }
+
+    if (
+      typeof value !==
+      "object"
+    ) {
+      return JSON.stringify(
+        value
+      );
+    }
+
+    if (
+      Array.isArray(
+        value
+      )
+    ) {
+      return `[${value
+        .map(
+          (item) =>
+            stableSerializeStatic(
+              item
+            )
+        )
+        .join(",")}]`;
+    }
+
+    const object =
+      value as Record<
+        string,
+        unknown
+      >;
+
+    return `{${Object.keys(
+      object
+    )
+      .sort()
+      .map(
+        (key) =>
+          `${JSON.stringify(
+            key
+          )}:${stableSerializeStatic(
+            object[key]
+          )}`
+      )
+      .join(",")}}`;
+  } catch {
+    return JSON.stringify(
+      value
+    );
+  }
+}
 
 /* ============================================================
    HOOK

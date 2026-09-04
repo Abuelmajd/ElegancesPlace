@@ -2008,17 +2008,20 @@ export const GoogleSheetsProvider:
 
             const tableNames =
               Object.keys(
-                tables
+                tables.tables || {}
+              );
+
+            const deletedNames =
+              Object.keys(
+                tables.deleted || {}
               );
 
             /*
-             * لا يوجد شيء تغير.
-             *
-             * لا نرسل أي طلب إلى Google.
+             * لا يوجد شيء تغير ولا توجد محذوفات.
              */
             if (
-              tableNames.length ===
-              0
+              tableNames.length === 0 &&
+              deletedNames.length === 0
             ) {
               console.info(
                 "Google Sheets V3 Incremental Sync: لا توجد تغييرات."

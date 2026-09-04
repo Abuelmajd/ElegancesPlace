@@ -1344,18 +1344,23 @@ export const GoogleSheetsProvider:
               };
             }
 
+            /*
+             * مهم:
+             *
+             * لا نستخدم result.directUrl
+             * لأن Apps Script قد يعيد رابط download.
+             *
+             * نبني رابط الصورة مباشرة من File ID.
+             */
             const directUrl =
-              result.directUrl ||
               formatGoogleDriveDirectUrl(
                 fileId
               );
 
             const viewUrl =
-              result.viewUrl ||
               `https://drive.google.com/uc?export=view&id=${fileId}`;
 
             const driveUrl =
-              result.driveUrl ||
               `https://drive.google.com/file/d/${fileId}/view`;
 
             /*
@@ -1605,15 +1610,12 @@ export const GoogleSheetsProvider:
             }
 
             const directUrl =
-              result.directUrl ||
-              (
-                mediaType === "image"
-                  ? formatGoogleDriveDirectUrl(
-                      fileId
-                    )
-                  : result.viewUrl ||
+              mediaType === "image"
+                ? formatGoogleDriveDirectUrl(fileId)
+                : (
+                    result.viewUrl ||
                     `https://drive.google.com/file/d/${fileId}/view`
-              );
+                  );
 
             const viewUrl =
               result.viewUrl ||

@@ -152,17 +152,18 @@ export function extractGoogleDriveId(
  * ============================================================
  */
 export function formatGoogleDriveDirectUrl(
-  fileId: string
+  fileIdOrUrl: string
 ): string {
+  const fileId =
+    extractGoogleDriveId(
+      fileIdOrUrl
+    );
 
   if (!fileId) {
-    return '';
+    return "";
   }
 
-
-  return (
-    `https://lh3.googleusercontent.com/d/${fileId}`
-  );
+  return `https://lh3.googleusercontent.com/d/${fileId}`;
 }
 
 

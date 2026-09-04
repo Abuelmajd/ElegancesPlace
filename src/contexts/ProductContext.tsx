@@ -58,7 +58,19 @@ import {
  * image_data   -> never stored
  */
 
-export type StoreProduct = Product;
+export type StoreProduct = Product & {
+  /**
+   * Compatibility field used by the storefront UI.
+   *
+   * Canonical V3 fields remain:
+   * image_url
+   * drive_file_id
+   *
+   * `image` is only the display-ready value used by
+   * StorefrontHome and other existing UI components.
+   */
+  image?: string;
+};
 
 interface ProductContextType {
   products: StoreProduct[];
@@ -290,6 +302,16 @@ function sanitizeProductForCache(
 
     drive_file_id:
       source.drive_file_id || "",
+
+    image:
+      source.image ||
+      (
+        source.drive_file_id
+          ? formatGoogleDriveDirectUrl(
+              source.drive_file_id
+            )
+          : imageUrl || ""
+      ),
 
     rating:
       source.rating,
@@ -770,6 +792,16 @@ function buildCanonicalProduct(
     drive_file_id:
       product.drive_file_id || "",
 
+    image:
+      product.image ||
+      (
+        product.drive_file_id
+          ? formatGoogleDriveDirectUrl(
+              product.drive_file_id
+            )
+          : product.image_url || ""
+      ),
+
     rating:
       product.rating ?? 0,
 
@@ -1034,6 +1066,13 @@ export const ProductProvider:
 
             drive_file_id:
               driveFileId,
+
+            image:
+              driveFileId
+                ? formatGoogleDriveDirectUrl(
+                    driveFileId
+                  )
+                : imageUrl,
 
             created_at:
               now,

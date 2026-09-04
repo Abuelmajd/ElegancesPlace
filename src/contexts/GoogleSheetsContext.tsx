@@ -1711,8 +1711,10 @@ export const GoogleSheetsProvider:
 
           try {
             const tables:
-              V3ChangedTablesPayload =
-              {};
+              V3ChangedTablesPayload = {
+              tables: {},
+              deleted: {},
+            };
 
             /*
              * ==================================================

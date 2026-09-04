@@ -1860,13 +1860,15 @@ export const GoogleSheetsProvider:
                         mediaType,
 
                       driveUrl:
-                        file.driveUrl,
+                        file.driveUrl ||
+                        `https://drive.google.com/file/d/${fileId}/view`,
 
                       viewUrl:
-                        file.viewUrl,
+                        file.viewUrl ||
+                        `https://drive.google.com/uc?export=view&id=${fileId}`,
 
                       directUrl:
-                        file.directUrl,
+                        formatGoogleDriveDirectUrl(fileId),
                     };
                   }
                 )

@@ -111,7 +111,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     getProductStock,
     setStockDirectly,
   } = useInventory();
-  const { config, updateConfig, syncNow, uploadImageToDrive, logs } = useGoogleSheets();
+  const { config, updateConfig, syncNow, uploadImageToDrive, logs, getCachedTable, syncChangedTables } = useGoogleSheets();
   const { reviews } = useReviews();
   const { storeSettings } = useStoreManagement();
   const [activeTab, setActiveTab] = useState<'overview' | 'store_management' | 'settings' | 'products' | 'orders' | 'returns' | 'suppliers' | 'accounting' | 'reports' | 'customers' | 'googlesheets' | 'notifications' | 'reviews' | 'pricing' | 'importer'>('products');
@@ -359,6 +359,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   });
 
   useEffect(() => {
+    const sheetsSuppliers = getCachedTable("suppliers") as Supplier[];
+    if (sheetsSuppliers && sheetsSuppliers.length > 0) {
+      setSuppliers(sheetsSuppliers);
+    }
+  }, [getCachedTable]);
+
+  useEffect(() => {
     localStorage.setItem('elites_suppliers', JSON.stringify(suppliers));
   }, [suppliers]);
 
@@ -422,62 +429,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     setIsAddSupplierModalOpen(true);
   };
 
-  const handleSaveSupplier = (e: React.FormEvent) => {
+  const handleSaveSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!supCompany.trim()) {
+    if (!String(supCompany || '').trim()) {
       alert('يرجى كتابة اسم الشركة أو مؤسسة التوريد');
       return;
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const finalName = supName.trim() || 'المسؤول العام';
-    const finalPhone = supPhone.trim() || '-';
-    const finalWhatsapp = supWhatsapp.trim() || (supPhone.trim() ? supPhone.trim() : '');
-    const finalEmail = supEmail.trim() || `${supCompany.toLowerCase().replace(/\s+/g, '_')}@supplier.com`;
-    const finalCity = supCity.trim() || 'القدس';
+    const finalName = String(supName || '').trim() || 'المسؤول العام';
+    const finalPhone = String(supPhone || '').trim() || '-';
+    const finalWhatsapp = String(supWhatsapp || '').trim() || (String(supPhone || '').trim() ? String(supPhone || '').trim() : '');
+    const finalEmail = String(supEmail || '').trim() || `${String(supCompany || '').toLowerCase().replace(/\s+/g, '_')}@supplier.com`;
+    const finalCity = String(supCity || '').trim() || 'القدس';
 
     if (editingSupplier) {
-      setSuppliers(prev => prev.map(s => s.supplier_id === editingSupplier.supplier_id ? {
-        ...s,
+      const updatedSupplier = {
+        ...editingSupplier,
         name: finalName,
-        company_name: supCompany.trim(),
+        company_name: String(supCompany || '').trim(),
         phone: finalPhone,
         whatsapp: finalWhatsapp,
-        telegram: supTelegram.trim(),
-        facebook: supFacebook.trim(),
-        instagram: supInstagram.trim(),
-        website: supWebsite.trim(),
+        telegram: String(supTelegram || '').trim(),
+        facebook: String(supFacebook || '').trim(),
+        instagram: String(supInstagram || '').trim(),
+        website: String(supWebsite || '').trim(),
         preferred_platform: supPreferredPlatform,
         email: finalEmail,
         city: finalCity,
-        address: supAddress.trim(),
-        notes: supNotes.trim(),
+        address: String(supAddress || '').trim(),
+        notes: String(supNotes || '').trim(),
         status: supStatus,
         updated_at: todayStr
-      } : s));
-      setSuccessMsg(`تم تحديث بيانات المورد "${supCompany}" بنجاح!`);
+      };
+
+      setSuppliers(prev => prev.map(s => s.supplier_id === editingSupplier.supplier_id ? updatedSupplier : s));
+      
+      await syncChangedTables({
+        suppliers: [updatedSupplier]
+      });
+
+      setSuccessMsg(`تم تحديث بيانات المورد "${String(supCompany || '').trim()}" بنجاح!`);
     } else {
       const newSup: Supplier = {
         supplier_id: 'sup_' + Math.random().toString(36).substr(2, 7),
         name: finalName,
-        company_name: supCompany.trim(),
+        company_name: String(supCompany || '').trim(),
         phone: finalPhone,
         whatsapp: finalWhatsapp,
-        telegram: supTelegram.trim(),
-        facebook: supFacebook.trim(),
-        instagram: supInstagram.trim(),
-        website: supWebsite.trim(),
+        telegram: String(supTelegram || '').trim(),
+        facebook: String(supFacebook || '').trim(),
+        instagram: String(supInstagram || '').trim(),
+        website: String(supWebsite || '').trim(),
         preferred_platform: supPreferredPlatform,
         email: finalEmail,
         city: finalCity,
-        address: supAddress.trim(),
-        notes: supNotes.trim(),
+        address: String(supAddress || '').trim(),
+        notes: String(supNotes || '').trim(),
         status: supStatus,
         created_at: todayStr,
         updated_at: todayStr
       };
       setSuppliers(prev => [newSup, ...prev]);
-      setSuccessMsg(`تمت إضافة المورد الجديد "${supCompany}" بنجاح وتحديث قاعدة البيانات!`);
+      
+      await syncChangedTables({
+        suppliers: [newSup]
+      });
+
+      setSuccessMsg(`تمت إضافة المورد الجديد "${String(supCompany || '').trim()}" بنجاح وتحديث قاعدة البيانات!`);
     }
 
     setIsAddSupplierModalOpen(false);

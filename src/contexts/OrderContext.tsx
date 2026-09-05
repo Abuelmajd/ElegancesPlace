@@ -794,6 +794,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const oStatus = orderInput.order_status || 'NEW';
 
     const newOrder: Order = {
+      id: orderId,
       order_id: orderId,
       order_number: orderInput.order_number || orderNum,
       customer_id: customerId,

@@ -246,9 +246,9 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
 
   // Filtered Products
   const filteredProducts = (products || []).filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (p.category_id && p.category_id.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = String(p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          String(p.category_id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          String(p.description || '').toLowerCase().includes(searchQuery.toLowerCase());
     
     let matchesCategory = selectedCategory === 'all';
     if (!matchesCategory) {

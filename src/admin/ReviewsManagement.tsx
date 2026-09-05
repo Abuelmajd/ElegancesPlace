@@ -19,10 +19,10 @@ export const ReviewsManagement: React.FC = () => {
       const q = searchQuery.toLowerCase();
       const p = products.find(prod => prod.id === r.product_id);
       return (
-        r.title.toLowerCase().includes(q) ||
-        r.comment.toLowerCase().includes(q) ||
-        r.customer_name_snapshot.toLowerCase().includes(q) ||
-        (p?.name.toLowerCase().includes(q))
+        String(r.title || '').toLowerCase().includes(q) ||
+        String(r.comment || '').toLowerCase().includes(q) ||
+        String(r.customer_name_snapshot || '').toLowerCase().includes(q) ||
+        String(p?.name || '').toLowerCase().includes(q)
       );
     }
     return true;

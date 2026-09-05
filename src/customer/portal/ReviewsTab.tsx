@@ -22,12 +22,12 @@ export const ReviewsTab: React.FC = () => {
 
   // Customer reviews
   const currentUserId = currentUser?.user_id || (currentUser as any)?.id;
-  const currentEmail = currentUser?.email?.toLowerCase();
+  const currentEmail = String(currentUser?.email || '').toLowerCase();
 
   const myReviews = reviews.filter(r => 
     currentUser && (
       r.customer_id === currentUserId || 
-      (currentEmail && (r as any).customer_email?.toLowerCase() === currentEmail)
+      (currentEmail && String((r as any).customer_email || '').toLowerCase() === currentEmail)
     )
   );
 
@@ -36,7 +36,7 @@ export const ReviewsTab: React.FC = () => {
     if (!currentUser) return false;
     const isMine = (o.customer_id === currentUserId) || 
       (currentUser.phone && o.customer_phone === currentUser.phone) ||
-      (currentEmail && o.customer_email?.toLowerCase() === currentEmail);
+      (currentEmail && String(o.customer_email || '').toLowerCase() === currentEmail);
     const s = o.order_status?.toUpperCase() || '';
     return isMine && (s === 'DELIVERED' || s === 'SETTLED' || s === 'COLLECTED_BY_SUPPLIER');
   });

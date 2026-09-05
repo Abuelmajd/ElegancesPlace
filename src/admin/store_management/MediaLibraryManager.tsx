@@ -155,7 +155,7 @@ export const MediaLibraryManager: React.FC = () => {
   };
 
   const filteredItems = mediaItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = String(item.name || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTag = selectedTag === 'all' || (item.used_in && item.used_in.includes(selectedTag));
     return matchesSearch && matchesTag;
   });

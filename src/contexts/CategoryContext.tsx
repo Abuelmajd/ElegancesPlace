@@ -148,7 +148,7 @@ export const CategoryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       ...categoryData,
       id,
       category_id: id,
-      slug: categoryData.slug || categoryData.name.toLowerCase().replace(/\s+/g, '-'),
+      slug: categoryData.slug || (categoryData.name ? categoryData.name.toLowerCase().replace(/\s+/g, '-') : id),
       sort_order: categoryData.sort_order || (categories.length + 1)
     };
     setCategories(prev => [...prev, newCategory]);

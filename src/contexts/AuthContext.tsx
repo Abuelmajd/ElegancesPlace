@@ -188,7 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Offline / fallback login for demo or when firebase auth is unconfigured/disabled
-    const found = Object.values(DEMO_USERS).find(u => u.email.toLowerCase() === email.toLowerCase());
+    const found = Object.values(DEMO_USERS).find(u => String(u.email || '').toLowerCase() === String(email || '').toLowerCase());
     if (found) {
       setCurrentUser(found);
       localStorage.setItem('elites_current_user', JSON.stringify(found));

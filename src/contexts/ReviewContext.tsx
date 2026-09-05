@@ -65,13 +65,13 @@ export const ReviewProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const currentUserId = currentUser.user_id || (currentUser as any).id;
-    const currentEmail = currentUser.email?.toLowerCase();
+    const currentEmail = String(currentUser.email || '').toLowerCase();
     const currentPhone = currentUser.phone;
 
     // Filter customer orders
     const customerOrders = orders.filter(o => 
       (currentUserId && o.customer_id === currentUserId) ||
-      (currentEmail && o.customer_email?.toLowerCase() === currentEmail) ||
+      (currentEmail && String(o.customer_email || '').toLowerCase() === currentEmail) ||
       (currentPhone && o.customer_phone === currentPhone)
     );
 
@@ -83,7 +83,7 @@ export const ReviewProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // 1. Has user already reviewed this product?
     const existingReview = reviews.find(r => 
-      (r.customer_id === currentUserId || (currentEmail && (r as any).customer_email?.toLowerCase() === currentEmail)) && 
+      (r.customer_id === currentUserId || (currentEmail && String((r as any).customer_email || '').toLowerCase() === currentEmail)) && 
       r.product_id === productId
     );
 

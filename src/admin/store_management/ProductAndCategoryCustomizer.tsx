@@ -574,9 +574,9 @@ export const ProductAndCategoryCustomizer: React.FC = () => {
   };
 
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          p.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = String(p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          String(p.sku || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          String(p.category || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCat = selectedCategory === 'all' || p.category === selectedCategory;
     return matchesSearch && matchesCat;
   });

@@ -232,7 +232,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   const [imageFileSize, setImageFileSize] = useState<string>('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
-  const [prodSupplier, setProdSupplier] = useState('المورد الرئيسي');
+  const [prodSupplier, setProdSupplier] = useState('');
+  const [prodFulfillmentMethod, setProdFulfillmentMethod] = useState<'OWN_STOCK' | 'SUPPLIER_DROPSHIPPING'>('OWN_STOCK');
   const [prodStock, setProdStock] = useState('15');
   const [stockInputs, setStockInputs] = useState<Record<string, string>>({});
   const [prodDesc, setProdDesc] = useState('');
@@ -615,10 +616,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                 prodDriveFileId || "",
 
               fulfillment_method:
-                "OWN_STOCK",
+                prodFulfillmentMethod,
 
               stock_tracking:
-                false,
+                prodFulfillmentMethod === "OWN_STOCK",
 
               status:
                 "ACTIVE",
@@ -648,63 +649,66 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
         const newProductId = `prod_${Date.now()}`;
         
         const success =
-          await addProduct({
-            product_id: newProductId,
+          await addProduct(
+            {
+              product_id: newProductId,
 
-            sku:
-              `SKU-${Date.now()}`,
+              sku:
+                `SKU-${Date.now()}`,
 
-            status:
-              "ACTIVE",
+              status:
+                "ACTIVE",
 
-            name:
-              prodName.trim(),
+              name:
+                prodName.trim(),
 
-            description:
-              prodDesc || "",
+              description:
+                prodDesc || "",
 
-            selling_price:
-              finalPrice,
+              selling_price:
+                finalPrice,
 
-            cost_price:
-              wholesale,
+              cost_price:
+                wholesale,
 
-            old_price:
-              Number(prodOldPrice) || 0,
+              old_price:
+                Number(prodOldPrice) || 0,
 
-            category_id:
-              prodCategory || "",
+              category_id:
+                prodCategory || "",
 
-            image_url:
-              prodImage,
+              image_url:
+                prodImage,
 
-            drive_file_id:
-              prodDriveFileId || "",
+              drive_file_id:
+                prodDriveFileId || "",
 
-            fulfillment_method:
-              "OWN_STOCK",
+              fulfillment_method:
+                prodFulfillmentMethod,
 
-            stock_tracking:
-              false,
+              stock_tracking:
+                prodFulfillmentMethod === "OWN_STOCK",
 
-            badge:
-              "جديد",
+              badge:
+                "جديد",
 
-            rating:
-              0,
+              rating:
+                0,
 
-            cost_currency:
-              "ILS",
+              cost_currency:
+                "ILS",
 
-            selling_currency:
-              "ILS",
+              selling_currency:
+                "ILS",
 
-            old_price_currency:
-              "ILS",
+              old_price_currency:
+                "ILS",
 
-            product_group_id:
-              "",
-          });
+              product_group_id:
+                "",
+            },
+            prodSupplier
+          );
 
         if (!success) {
           alert(
@@ -715,7 +719,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
 
         const initialStock = Math.max(0, Number(prodStock) || 0);
 
-        if (initialStock > 0) {
+        if (
+          prodFulfillmentMethod === "OWN_STOCK" &&
+          initialStock > 0
+        ) {
           setStockDirectly(
             newProductId,
             initialStock,
@@ -784,7 +791,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     setImageFileName('');
     setImageFileSize('');
     
-    setProdSupplier('المورد الرئيسي');
+    setProdSupplier('');
     setProdStock('0');
     setProdDesc('');
     setProductMode('add');
@@ -803,7 +810,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     setProdCategory(p.category);
     setProdImage(p.image);
     setProdDriveFileId(p.drive_file_id || '');
-    setProdSupplier(p.supplier || 'المورد الرئيسي');
+    setProdSupplier(p.supplier_id || '');
     setProdStock(String(p.stock ?? 999));
     setProdDesc(p.description || '');
     setProductMode('edit');
@@ -819,20 +826,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   ];
 
   const filteredUsers = allUsers.filter(u => 
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+    String(u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+    String(u.email || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.category.toLowerCase().includes(searchQuery.toLowerCase())
+    String(p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    String(p.category || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredSuppliers = suppliers.filter(s =>
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.company_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.phone.includes(searchQuery)
+    String(s.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    String(s.company_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    String(s.city || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    String(s.phone || '').includes(searchQuery)
   );
 
   return (
@@ -1524,12 +1531,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                           onChange={(e) => setProdSupplier(e.target.value)}
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-blue-600 cursor-pointer"
                         >
-                          <option value="المورد الرئيسي">المورد الرئيسي (مستودع المتجر)</option>
+                          <option value="">المورد الرئيسي (مستودع المتجر)</option>
                           {suppliers.map((s) => (
-                            <option key={s.supplier_id} value={s.company_name}>
+                            <option key={s.supplier_id} value={s.supplier_id}>
                               {s.company_name} ({s.name})
                             </option>
                           ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">طريقة التوفير والتنفيذ</label>
+                        <select
+                          value={prodFulfillmentMethod}
+                          onChange={(e) => setProdFulfillmentMethod(e.target.value as 'OWN_STOCK' | 'SUPPLIER_DROPSHIPPING')}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-blue-600 cursor-pointer"
+                        >
+                          <option value="OWN_STOCK">مخزون ذاتي (تتبع كميات متوفرة)</option>
+                          <option value="SUPPLIER_DROPSHIPPING">دروب شيبينغ (من المورد مباشرة)</option>
                         </select>
                       </div>
 

@@ -79,7 +79,8 @@ interface ProductContextType {
     product: Omit<
       StoreProduct,
       "id" | "created_at" | "updated_at"
-    >
+    >,
+    supplierId?: string
   ) => Promise<boolean>;
 
   updateProduct: (
@@ -962,7 +963,8 @@ export const ProductProvider:
       productData: Omit<
         StoreProduct,
         "id" | "created_at" | "updated_at"
-      >
+      >,
+      supplierId?: string
     ): Promise<boolean> => {
 
       try {
@@ -1181,18 +1183,46 @@ export const ProductProvider:
            INCREMENTAL SYNC
            ===================================================== */
 
-        const changedTables = {
+        const changedTables: Record<string, unknown[]> = {
           products: [
-            sanitizeProductForCache(
-              newProduct
-            ),
+            sanitizeProductForCache(newProduct),
           ],
         };
+
+        if (supplierId) {
+          changedTables.product_sources = [
+            {
+              id:
+                `ps_${Date.now()}_` +
+                Math.random().toString(36).substring(2, 7),
+
+              source_id:
+                `src_${Date.now()}_` +
+                Math.random().toString(36).substring(2, 7),
+
+              product_id: newProduct.product_id,
+              variant_id: "",
+              supplier_id: supplierId,
+              supplier_sku: "",
+              cost_price: newProduct.cost_price || 0,
+              cost_currency: newProduct.cost_currency || "ILS",
+              supplier_stock: "",
+              minimum_order_quantity: 1,
+              fulfillment_method: newProduct.fulfillment_method,
+              is_preferred: true,
+              status: "ACTIVE",
+              notes: "",
+              supplier_shipping_policy: "",
+              created_at: now,
+              updated_at: now,
+            },
+          ];
+        }
 
         if (
           imageRecord
         ) {
-          (changedTables as Record<string, unknown[]>).product_images = [
+          changedTables.product_images = [
             imageRecord,
           ];
         }
@@ -1200,8 +1230,8 @@ export const ProductProvider:
         /*
          * IMPORTANT:
          *
-         * We send ONLY the newly created product
-         * and its image metadata.
+         * We send ONLY the newly created product,
+         * its supplier source, and image metadata.
          *
          * We do NOT send the complete database.
          */

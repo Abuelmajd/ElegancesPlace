@@ -359,9 +359,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   });
 
   useEffect(() => {
-    const sheetsSuppliers = getCachedTable("suppliers") as Supplier[];
-    if (sheetsSuppliers && sheetsSuppliers.length > 0) {
+    const sheetsSuppliers =
+      getCachedTable("suppliers") as Supplier[];
+
+    if (Array.isArray(sheetsSuppliers)) {
       setSuppliers(sheetsSuppliers);
+
+      localStorage.setItem(
+        "elites_suppliers",
+        JSON.stringify(sheetsSuppliers)
+      );
     }
   }, [getCachedTable]);
 

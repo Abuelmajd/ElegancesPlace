@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProducts } from '../contexts/ProductContext';
+import { useInventory } from '../contexts/InventoryContext';
 import { useGoogleSheets } from '../contexts/GoogleSheetsContext';
 import { useReviews } from '../contexts/ReviewContext';
 import { useStoreManagement } from '../contexts/StoreContext';
@@ -105,6 +106,11 @@ interface AdminDashboardProps {
 export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   const { currentUser, role, allUsers, updateUserRole } = useAuth();
   const { products, addProduct, updateProduct, updateProducts, deleteProduct } = useProducts();
+  const {
+    inventory,
+    getProductStock,
+    setStockDirectly,
+  } = useInventory();
   const { config, updateConfig, syncNow, uploadImageToDrive, logs } = useGoogleSheets();
   const { reviews } = useReviews();
   const { storeSettings } = useStoreManagement();
@@ -228,6 +234,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [prodSupplier, setProdSupplier] = useState('المورد الرئيسي');
   const [prodStock, setProdStock] = useState('15');
+  const [stockInputs, setStockInputs] = useState<Record<string, string>>({});
   const [prodDesc, setProdDesc] = useState('');
   const [prodSubCategory, setProdSubCategory] = useState('');
   const [prodSizes, setProdSizes] = useState<string[]>([]);
@@ -1132,9 +1139,86 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-3">
-                                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700">
-                                  أفلييت (بدون تخزين مادي)
-                                </span>
+                                {(() => {
+                                  const productId = p.product_id || p.id;
+                                  const currentStock = getProductStock(productId);
+
+                                  return (
+                                    <div className="flex flex-col gap-2 min-w-[150px]">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-500">
+                                          المتاح:
+                                        </span>
+
+                                        <span
+                                          className={`font-extrabold ${
+                                            currentStock <= 0
+                                              ? 'text-red-600'
+                                              : currentStock <= 5
+                                              ? 'text-orange-600'
+                                              : 'text-emerald-600'
+                                          }`}
+                                        >
+                                          {currentStock}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={
+                                            stockInputs[productId] ??
+                                            String(currentStock)
+                                          }
+                                          onChange={(e) =>
+                                            setStockInputs(prev => ({
+                                              ...prev,
+                                              [productId]: e.target.value,
+                                            }))
+                                          }
+                                          className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-center font-bold focus:outline-none focus:border-blue-500"
+                                        />
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const value = Number(stockInputs[productId]);
+
+                                            if (!Number.isFinite(value) || value < 0) {
+                                              alert('يرجى إدخال كمية مخزون صحيحة.');
+                                              return;
+                                            }
+
+                                            setStockDirectly(
+                                              productId,
+                                              value,
+                                              'تعديل المخزون من لوحة التحكم'
+                                            );
+
+                                            setStockInputs(prev => {
+                                              const next = { ...prev };
+                                              delete next[productId];
+                                              return next;
+                                            });
+
+                                            setSuccessMsg(
+                                              `تم تحديث مخزون "${p.name}" إلى ${value}`
+                                            );
+
+                                            setTimeout(
+                                              () => setSuccessMsg(''),
+                                              3000
+                                            );
+                                          }}
+                                          className="px-2 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold"
+                                        >
+                                          حفظ
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </td>
                               <td className="px-6 py-3 flex items-center gap-2">
                                 <button

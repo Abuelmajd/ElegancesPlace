@@ -286,12 +286,15 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const dateStr = nowIso.split('T')[0];
     const timeStr = now.toTimeString().split(' ')[0];
 
+    const movementId =
+      'mov_' +
+      Date.now() +
+      '_' +
+      Math.random().toString(36).substring(2, 6);
+
     const newMovement: InventoryMovement = {
-      movement_id:
-        'mov_' +
-        Date.now() +
-        '_' +
-        Math.random().toString(36).substring(2, 6),
+      id: movementId,
+      movement_id: movementId,
 
       product_id: productId,
       movement_type: movementType,
@@ -308,7 +311,6 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       created_at: nowIso,
       reason: notes || `حركة مخزون (${movementType})`,
 
-      // Compatibility
       order_id: orderId,
       date: dateStr,
       time: timeStr,

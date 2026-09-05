@@ -645,10 +645,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
          ===================================================== */
 
       else {
+        const newProductId = `prod_${Date.now()}`;
+        
         const success =
           await addProduct({
-            product_id:
-              `prod_${Date.now()}`,
+            product_id: newProductId,
 
             sku:
               `SKU-${Date.now()}`,
@@ -712,6 +713,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
           return;
         }
 
+        const initialStock = Math.max(0, Number(prodStock) || 0);
+
+        if (initialStock > 0) {
+          setStockDirectly(
+            newProductId,
+            initialStock,
+            'الكمية الابتدائية عند إضافة المنتج'
+          );
+        }
+
         setSuccessMsg(
           "تمت إضافة المنتج ورفع الصورة إلى Google Drive ومزامنته مع Google Sheets بنجاح."
         );
@@ -732,6 +743,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
       setProfitMarginVal("30");
       setProdPrice("130");
       setProdOldPrice("160");
+      
+      setProdStock('0');
 
       setImageFileName("");
       setImageFileSize("");
@@ -772,7 +785,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     setImageFileSize('');
     
     setProdSupplier('المورد الرئيسي');
-    setProdStock('999');
+    setProdStock('0');
     setProdDesc('');
     setProductMode('add');
   };
@@ -1518,6 +1531,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                             </option>
                           ))}
                         </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          الكمية المتوفرة عند الإضافة
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={prodStock}
+                          onChange={(e) => setProdStock(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-600"
+                          placeholder="مثال: 5"
+                        />
+                        <span className="text-[10px] text-slate-400 mt-1 block">
+                          سيتم تسجيل هذه الكمية في مخزون المنتج.
+                        </span>
                       </div>
 
                       {/* Image Upload Area */}

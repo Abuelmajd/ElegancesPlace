@@ -870,6 +870,8 @@ export const ProductProvider:
        * recovery mechanism.
        */
       syncChangedTables,
+      pullTables,
+      getCachedTable,
     } = useGoogleSheets();
 
     /* =======================================================
@@ -913,6 +915,34 @@ export const ProductProvider:
       productsRef.current =
         products;
     }, [products]);
+
+    useEffect(() => {
+      void (async () => {
+        try {
+          await pullTables(['products']);
+
+          const cachedProducts =
+            getCachedTable('products') as StoreProduct[];
+
+          if (Array.isArray(cachedProducts)) {
+            const normalizedProducts =
+              cachedProducts.map(sanitizeProductForCache);
+
+            productsRef.current = normalizedProducts;
+            setProducts(normalizedProducts);
+            saveProductsCache(normalizedProducts);
+          }
+        } catch (error) {
+          console.error(
+            'ProductContext V3: فشل تحميل المنتجات من Google Sheets:',
+            error
+          );
+        }
+      })();
+    }, [
+      pullTables,
+      getCachedTable,
+    ]);
 
     /* =======================================================
        REMOVE LEGACY PRODUCT CACHE

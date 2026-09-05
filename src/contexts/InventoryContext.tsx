@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Inventory, InventoryMovement } from '../types';
 import { useGoogleSheets } from './GoogleSheetsContext';
 import { useAuth } from './AuthContext';
+import { useProducts } from './ProductContext';
 
 export interface InventoryContextType {
   inventory: Inventory[];
@@ -55,6 +56,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     getCachedTable,
   } = useGoogleSheets();
   const { currentUser } = useAuth();
+  const { products } = useProducts();
 
   const [inventory, setInventory] = useState<Inventory[]>(() => {
     const cached = localStorage.getItem('elites_inventory');
@@ -105,13 +107,20 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     void (async () => {
       try {
-        await pullTables(['inventory', 'inventory_movements', 'warehouses']);
+        await pullTables([
+          'warehouses',
+          'inventory',
+          'inventory_movements',
+        ]);
 
         const cachedInventory =
           getCachedTable('inventory') as Inventory[];
 
         const cachedMovements =
           getCachedTable('inventory_movements') as InventoryMovement[];
+
+        const warehouses =
+          getCachedTable('warehouses') as any[];
 
         if (Array.isArray(cachedInventory)) {
           setInventory(cachedInventory);
@@ -121,11 +130,10 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setInventoryMovements(cachedMovements);
         }
 
-        const warehouses = getCachedTable('warehouses') as any[];
-
-        const mainWarehouse = Array.isArray(warehouses)
-          ? warehouses.find(w => w.warehouse_id === 'WH_MAIN')
-          : null;
+        // إنشاء المستودع الرئيسي إذا لم يكن موجوداً
+        const mainWarehouse = warehouses?.find(
+          w => w.warehouse_id === 'WH_MAIN'
+        );
 
         if (!mainWarehouse) {
           await syncChangedTables({
@@ -147,11 +155,70 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             },
           });
         }
+
+        // إنشاء سجل مخزون لكل منتج لا يملك Inventory
+        const existingInventory =
+          Array.isArray(cachedInventory)
+            ? cachedInventory
+            : [];
+
+        const newInventoryRecords: Inventory[] = [];
+
+        for (const product of products) {
+          const productId = product.product_id || product.id;
+
+          if (!productId) continue;
+
+          const exists = existingInventory.some(
+            item => item.product_id === productId
+          );
+
+          if (exists) continue;
+
+          const inventoryId =
+            `inv_${Date.now()}_${Math.random()
+              .toString(36)
+              .substring(2, 8)}`;
+
+          newInventoryRecords.push({
+            id: inventoryId,
+            inventory_id: inventoryId,
+            product_id: productId,
+            warehouse_id: 'WH_MAIN',
+            sku: product.sku,
+            stock_quantity: 0,
+            reserved_quantity: 0,
+            available_quantity: 0,
+            last_update: new Date().toISOString(),
+          });
+        }
+
+        if (newInventoryRecords.length > 0) {
+          setInventory(prev => [
+            ...prev,
+            ...newInventoryRecords,
+          ]);
+
+          await syncChangedTables({
+            tables: {
+              inventory: newInventoryRecords,
+            },
+          });
+        }
+
       } catch (error) {
-        console.error('Inventory pull error:', error);
+        console.error(
+          'Inventory initialization error:',
+          error
+        );
       }
     })();
-  }, [pullTables, getCachedTable, syncChangedTables]);
+  }, [
+    pullTables,
+    getCachedTable,
+    syncChangedTables,
+    products,
+  ]);
 
   useEffect(() => {
     localStorage.setItem('elites_inventory', JSON.stringify(inventory));
@@ -166,11 +233,16 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [productStockMap]);
 
   const getProductStock = useCallback((productId: string) => {
-    if (productStockMap[productId] !== undefined) {
-      return productStockMap[productId];
+    const inventoryRecord = inventory.find(
+      item => item.product_id === productId
+    );
+
+    if (inventoryRecord) {
+      return Number(inventoryRecord.available_quantity || 0);
     }
+
     return 0;
-  }, [productStockMap]);
+  }, [inventory]);
 
   const adjustStock = useCallback((
     productId: string,

@@ -40,7 +40,7 @@ export const ReviewProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         order_id: 'ORD-2026-1001',
         rating: 5,
         title: 'عطر ممتاز',
-        comment: 'عطر فخم جداً ورائحته تدوم طويلاً، شكراً متجر النخبة!',
+        comment: 'عطر فخم جداً ورائحته تدوم طويلاً، شكراً ElegancesPlace!',
         status: 'APPROVED',
         created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
         updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),

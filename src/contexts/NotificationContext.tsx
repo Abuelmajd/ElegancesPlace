@@ -448,7 +448,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } else if (newStatus === 'DELIVERED') {
       notifType = 'ORDER_DELIVERED';
       customerTitle = `تم تسليم طلبك بنجاح #${order.order_number} 🎉`;
-      customerMsg = `نتمنى أن تنال منتجاتنا إعجابك! شكراً لثقتك بمتجر النخبة.`;
+      customerMsg = `نتمنى أن تنال منتجاتنا إعجابك! شكراً لثقتك بElegancesPlace.`;
       priority = 'NORMAL';
     } else if (newStatus === 'CANCELLED') {
       notifType = 'ORDER_CANCELLED';

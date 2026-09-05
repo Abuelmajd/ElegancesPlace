@@ -34,7 +34,7 @@ export const ReturnsTab: React.FC = () => {
         <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 text-xs text-stone-700 space-y-2">
           <div className="flex items-center gap-2 font-bold text-stone-900">
             <HelpCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>سياسة الشحن والإرجاع في متجر النخبة:</span>
+            <span>سياسة الشحن والإرجاع في ElegancesPlace:</span>
           </div>
           <ul className="list-disc list-inside space-y-1 text-stone-600 pl-2 text-[11px]">
             <li>يحق للعميل تقديم طلب إرجاع خلال 3 أيام من تاريخ استلام الشحنة.</li>

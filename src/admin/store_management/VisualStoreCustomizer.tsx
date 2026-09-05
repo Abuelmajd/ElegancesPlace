@@ -331,7 +331,7 @@ export const VisualStoreCustomizer: React.FC = () => {
                     </div>
                   )}
                   <span className="font-bold text-xs" style={{ color: draftThemeSettings.primaryColor }}>
-                    {storeSettings.store_name || 'متجر النخبة'}
+                    {storeSettings.store_name || 'ElegancesPlace'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
@@ -403,7 +403,7 @@ export const VisualStoreCustomizer: React.FC = () => {
                 className="p-4 text-center text-[10px] mt-auto border-t text-slate-300"
                 style={{ backgroundColor: draftThemeSettings.footerColor }}
               >
-                جميع الحقوق محفوظة © 2026 متجر النخبة
+                جميع الحقوق محفوظة © 2026 ElegancesPlace
               </div>
             </div>
           </div>

@@ -222,8 +222,8 @@ export const ProductAndCategoryCustomizer: React.FC = () => {
     setProdDescription(p.description || '');
     setProdCategory(p.category);
     setCostPrice(p.cost_price || 50);
-    setSellingPrice(p.price);
-    setCompareAtPrice(p.originalPrice || p.price);
+    setSellingPrice(p.selling_price);
+    setCompareAtPrice(p.originalPrice || p.selling_price);
     setStockQuantity(p.stock);
     setImages(p.images || []);
     setIsFeatured(p.featured || false);
@@ -990,8 +990,8 @@ export const ProductAndCategoryCustomizer: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {stagedProducts.map((item) => {
                   const p = item.productData;
-                  const discountPercent = p.originalPrice > p.price 
-                    ? Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100) 
+                  const discountPercent = p.originalPrice > p.selling_price 
+                    ? Math.round(((p.originalPrice - p.selling_price) / p.originalPrice) * 100) 
                     : 0;
                   let previewImg = p.image;
                   if (item.pendingFile && (item.pendingFile instanceof Blob || item.pendingFile instanceof File)) {
@@ -1035,8 +1035,8 @@ export const ProductAndCategoryCustomizer: React.FC = () => {
                         <div className="flex items-center justify-between pt-2 border-t border-stone-100">
                           <div>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-base font-black text-emerald-700">{p.price} ر.س</span>
-                              {p.originalPrice > p.price && (
+                              <span className="text-base font-black text-emerald-700">{p.selling_price} ر.س</span>
+                              {p.originalPrice > p.selling_price && (
                                 <span className="text-xs text-stone-400 line-through">{p.originalPrice} ر.س</span>
                               )}
                             </div>
@@ -1321,7 +1321,7 @@ export const ProductAndCategoryCustomizer: React.FC = () => {
                         </span>
                       </td>
                       <td className="p-3.5 font-bold text-stone-500">{product.cost_price || 50} ₪</td>
-                      <td className="p-3.5 font-extrabold text-emerald-700">{product.price} ₪</td>
+                      <td className="p-3.5 font-extrabold text-emerald-700">{product.selling_price} ₪</td>
                       <td className="p-3.5 font-bold">{product.stock} وحدة</td>
                       <td className="p-3.5">
                         <div className="flex items-center gap-1">

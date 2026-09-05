@@ -773,13 +773,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   const openEditProductPage = (p: any) => {
     setEditingProduct(p);
     setProdName(p.name);
-    const wholesale = p.costPrice || p.cost_price || Math.round((p.price || 150) * 0.7);
+    const wholesale = p.costPrice || p.cost_price || Math.round((p.selling_price || 150) * 0.7);
     setProdWholesalePrice(String(wholesale));
     setProfitMarginType('percentage');
-    const margin = Math.round((((p.price - wholesale) / wholesale) * 100)) || 30;
+    const margin = Math.round((((p.selling_price - wholesale) / wholesale) * 100)) || 30;
     setProfitMarginVal(String(margin));
-    setProdPrice(String(p.price));
-    setProdOldPrice(String(p.oldPrice || p.price * 1.25));
+    setProdPrice(String(p.selling_price));
+    setProdOldPrice(String(p.old_price || p.selling_price * 1.25));
     setProdCategory(p.category);
     setProdImage(p.image);
     setProdDriveFileId(p.drive_file_id || '');
@@ -835,7 +835,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
             </div>
           )}
           <span className="text-xl font-bold tracking-tight truncate">
-            {storeSettings.store_name || 'متجر النخبة'}
+            {storeSettings.store_name || 'ElegancesPlace'}
           </span>
         </div>
         <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
@@ -1124,11 +1124,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                               </td>
                               <td className="px-6 py-3">
                                 <div className="font-extrabold text-emerald-700 text-sm">
-                                  ₪ {p.price}
-                                  {p.oldPrice && <span className="text-stone-400 text-xs line-through mr-1 font-normal">₪ {p.oldPrice}</span>}
+                                  ₪ {p.selling_price}
+                                  {p.old_price && <span className="text-stone-400 text-xs line-through mr-1 font-normal">₪ {p.old_price}</span>}
                                 </div>
                                 <div className="text-[10px] text-slate-500 font-medium mt-0.5">
-                                  سعر الجملة: ₪ {p.costPrice || p.cost_price || Math.round(p.price * 0.7)}
+                                  سعر الجملة: ₪ {p.costPrice || p.cost_price || Math.round(p.selling_price * 0.7)}
                                 </div>
                               </td>
                               <td className="px-6 py-3">
@@ -1643,7 +1643,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          const scriptCode = `// Google Apps Script لمتجر النخبة: إدارة ومزامنة 24 جدولاً + Google Drive
+                          const scriptCode = `// Google Apps Script لElegancesPlace: إدارة ومزامنة 24 جدولاً + Google Drive
 function doGet(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1897,7 +1897,7 @@ function syncTable(ss, sheetName, data) {
               onUpdateProducts={(updatedProducts) => {
                 const updates = updatedProducts.map(p => ({
                   id: p.id,
-                  product: { price: Number(p.price) }
+                  product: { price: Number(p.selling_price) }
                 }));
                 updateProducts(updates);
                 setSuccessMsg('تم تحديث أسعار المنتجات المحددة بنجاح!');

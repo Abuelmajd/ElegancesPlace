@@ -145,7 +145,7 @@ const DEFAULT_HOMEPAGE_SECTIONS: HomepageSection[] = [
   {
     id: 'sec_hero',
     type: 'hero_banner',
-    title: 'متجر النخبة الفاخر',
+    title: 'ElegancesPlace الفاخر',
     subtitle: 'تجارب تسوق فريدة ومنتجات أصلية ذات جودة عالية مع توصيل سريع لجميع المناطق.',
     visible: true,
     order: 1,
@@ -246,7 +246,7 @@ const DEFAULT_ANNOUNCEMENT_BAR: AnnouncementBarConfig = {
 };
 
 const DEFAULT_FOOTER_CONFIG: FooterConfig = {
-  aboutText: 'متجر النخبة هو وجهتك الأولى للتسوق الإلكتروني الموثوق والفاخر بأعلى معايير الجودة والخدمة.',
+  aboutText: 'ElegancesPlace هو وجهتك الأولى للتسوق الإلكتروني الموثوق والفاخر بأعلى معايير الجودة والخدمة.',
   phone: '+970 599 000 000',
   whatsapp: '+970 599 000 000',
   email: 'support@elite-store.ps',
@@ -258,7 +258,7 @@ const DEFAULT_FOOTER_CONFIG: FooterConfig = {
   quickLinks: DEFAULT_MENUS,
   showPaymentIcons: true,
   showShippingInfo: true,
-  copyrightText: '© 2026 متجر النخبة. جميع الحقوق محفوظة.'
+  copyrightText: '© 2026 ElegancesPlace. جميع الحقوق محفوظة.'
 };
 
 const DEFAULT_PRODUCT_GUARANTEES: ProductGuaranteesConfig = {
@@ -272,7 +272,7 @@ const DEFAULT_PRODUCT_GUARANTEES: ProductGuaranteesConfig = {
 };
 
 const DEFAULT_STORE_SETTINGS = {
-  store_name: 'متجر النخبة',
+  store_name: 'ElegancesPlace',
   store_slogan: 'الفخامة والجودة بين يديك',
   store_mode: 'AFFILIATE_BROKER',
   logo_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&auto=format&fit=crop&q=80',
@@ -294,7 +294,7 @@ const DEFAULT_STORE_SETTINGS = {
   cancellation_policy: 'يمكن إلغاء الطلب قبل خروجه للتوصيل.',
   warranty_policy: 'ضمان شامل على العيوب المصنعية لمدة 6 أشهر.',
   privacy_policy: 'نحن نحترم خصوصية بياناتك ونضمن عدم مشاركتها مع أي طرف ثالث.',
-  terms: 'الشروط والأحكام الخاصة بالتسوق والطلب والتوصيل في متجر النخبة.',
+  terms: 'الشروط والأحكام الخاصة بالتسوق والطلب والتوصيل في ElegancesPlace.',
   hero_banner_url: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&auto=format&fit=crop&q=80',
   hero_title: 'تسوق أرقى المنتجات بأفضل الأسعار والجودة العالية',
   hero_subtitle: 'نظام متكامل مرتبط بقاعدة بيانات Google Sheets ومخزون حي وتنفيذ آمن لكافة الطلبات وتوصيل فوري لجميع المدن.',
@@ -309,9 +309,9 @@ const DEFAULT_STORE_SETTINGS = {
     telegram: 'https://t.me/elites_ps'
   },
   seo: {
-    meta_title: 'متجر النخبة | التسوق الفاخر والأفضل في المنطقة',
+    meta_title: 'ElegancesPlace | التسوق الفاخر والأفضل في المنطقة',
     meta_description: 'تصفح واشترِ أحدث العطور والأجهزة والساعات والملابس بأفضل الأسعار مع خدمات الدفع عند الاستلام والتوصيل السريع.',
-    keywords: 'متجر النخبة, تسوق اونلاين, عطور, ساعات, فلسطين, توصيل سريع'
+    keywords: 'ElegancesPlace, تسوق اونلاين, عطور, ساعات, فلسطين, توصيل سريع'
   }
 } as unknown as StoreSettings;
 
@@ -447,7 +447,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [mediaItems, setMediaItems] = useState<MediaItem[]>(() => getStored('elites_media_library', [
     {
       id: 'med_1',
-      name: 'شعار متجر النخبة',
+      name: 'شعار ElegancesPlace',
       url: DEFAULT_STORE_SETTINGS.logo_url,
       type: 'image/jpeg',
       created_at: new Date().toISOString(),

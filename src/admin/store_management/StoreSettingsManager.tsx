@@ -489,7 +489,7 @@ export const StoreSettingsManager: React.FC = () => {
                 )}
                 <div>
                   <span className="font-extrabold text-base text-slate-900 block leading-tight">
-                    {storeSettings.store_name || 'متجر النخبة'}
+                    {storeSettings.store_name || 'ElegancesPlace'}
                   </span>
                   <span className="text-[10px] text-slate-500 font-medium block">
                     {storeSettings.store_slogan || 'منصة التجارة الإلكترونية الفاخرة'}
@@ -972,7 +972,7 @@ export const StoreSettingsManager: React.FC = () => {
               className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
             >
               {products.map(p => (
-                <option key={p.id} value={p.id}>{p.name} - {p.price} ₪</option>
+                <option key={p.id} value={p.id}>{p.name} - {p.selling_price} ₪</option>
               ))}
             </select>
           </div>

@@ -32,7 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, setCurrentView, onO
     setLogoError(false);
   }, [storeSettings.logo_url]);
 
-  const storeName = storeSettings.store_name || 'متجر النخبة';
+  const storeName = storeSettings.store_name || 'ElegancesPlace';
   const logoInitial = storeName.trim().charAt(0) || 'ن';
 
   const isAdminRole = role && role !== 'Customer';

@@ -143,8 +143,8 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
             <h1 className="text-2xl sm:text-3xl font-black text-stone-900 leading-tight">{product.name}</h1>
             
             <div className="flex items-baseline gap-3">
-              <span className="text-3xl font-extrabold text-emerald-600">{product.price} ₪</span>
-              {product.oldPrice && <span className="text-base text-stone-400 line-through">{product.oldPrice} ₪</span>}
+              <span className="text-3xl font-extrabold text-emerald-600">{product.selling_price} ₪</span>
+              {product.old_price && <span className="text-base text-stone-400 line-through">{product.old_price} ₪</span>}
             </div>
 
             <div className="p-4 bg-stone-50/50 rounded-2xl border border-stone-200 text-sm text-stone-600 leading-relaxed">

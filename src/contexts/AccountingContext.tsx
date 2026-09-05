@@ -181,7 +181,7 @@ const INITIAL_EXPENSES: Expense[] = [
     expense_id: 'exp_2',
     category: 'PACKAGING',
     amount: 180,
-    description: 'شراء كراتين وتغليف فاخر وأكياس حريرية بشعار متجر النخبة',
+    description: 'شراء كراتين وتغليف فاخر وأكياس حريرية بشعار ElegancesPlace',
     date: '2026-08-18',
     time: '12:30',
     supplier_id: 'sup_3',

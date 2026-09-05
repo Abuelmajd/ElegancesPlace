@@ -6,7 +6,7 @@ export const Footer: React.FC = () => {
   const { storeSettings, footerConfig } = useStoreManagement();
   const [logoError, setLogoError] = useState(false);
 
-  const storeName = storeSettings.store_name || 'متجر النخبة';
+  const storeName = storeSettings.store_name || 'ElegancesPlace';
   const logoInitial = storeName.trim().charAt(0) || 'ن';
 
   return (

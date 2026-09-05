@@ -53,7 +53,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               نـ
             </div>
             <h3 className="text-xl font-extrabold text-stone-900">
-              {isRegister ? 'إنشاء حساب جديد في متجر النخبة' : 'تسجيل الدخول إلى حسابك'}
+              {isRegister ? 'إنشاء حساب جديد في ElegancesPlace' : 'تسجيل الدخول إلى حسابك'}
             </h3>
             <p className="text-xs text-stone-500 mt-1">الوصول الآمن لحسابك وطلباتك ومتابعة المشتريات</p>
           </div>

@@ -49,7 +49,7 @@ export const PricingCalculatorPage = ({ products, onUpdateProducts }: { products
         />
         <button onClick={applyBatchPricing} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">تطبيق على المحدد</button>
       </div>
-      <table className="w-full bg-white rounded-xl border border-slate-200"><thead><tr className="text-right border-b border-slate-200"><th className="p-4"><input type="checkbox" onChange={toggleAll} checked={selectedProductIds.size === products.length && products.length > 0}/></th><th className="p-4">اسم المنتج</th><th className="p-4">سعر الجملة</th><th className="p-4">سعر البيع</th></tr></thead><tbody>{products.map(p => (<tr key={p.id} className="border-b border-slate-100"><td className="p-4"><input type="checkbox" checked={selectedProductIds.has(p.id)} onChange={() => toggleProduct(p.id)}/></td><td className="p-4">{p.name}</td><td className="p-4">{p.wholesalePrice}</td><td className="p-4">{p.price}</td></tr>))}</tbody></table>
+      <table className="w-full bg-white rounded-xl border border-slate-200"><thead><tr className="text-right border-b border-slate-200"><th className="p-4"><input type="checkbox" onChange={toggleAll} checked={selectedProductIds.size === products.length && products.length > 0}/></th><th className="p-4">اسم المنتج</th><th className="p-4">سعر الجملة</th><th className="p-4">سعر البيع</th></tr></thead><tbody>{products.map(p => (<tr key={p.id} className="border-b border-slate-100"><td className="p-4"><input type="checkbox" checked={selectedProductIds.has(p.id)} onChange={() => toggleProduct(p.id)}/></td><td className="p-4">{p.name}</td><td className="p-4">{p.wholesalePrice}</td><td className="p-4">{p.selling_price}</td></tr>))}</tbody></table>
     </div>
   );
 };

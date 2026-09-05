@@ -171,9 +171,9 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
 
       if (viaWhatsApp) {
         const storePhone = (storeSettings.whatsapp || storeSettings.phone || '970599000000').replace(/[^0-9]/g, '');
-        const text = `مرحباً متجر النخبة، أود تأكيد الطلب المباشر للمنتج التالي:
+        const text = `مرحباً ElegancesPlace، أود تأكيد الطلب المباشر للمنتج التالي:
 📦 المنتج: ${directOrderProduct.name}
-💰 السعر: ${directOrderProduct.price} ₪ (الكمية: ${directOrderQuantity || 1})
+💰 السعر: ${directOrderProduct.selling_price} ₪ (الكمية: ${directOrderQuantity || 1})
 👤 اسم العميل: ${directOrderName || 'زبون النخبة'}
 📱 الهاتف: ${directOrderPhone}
 📍 المدينة والعنوان: ${directOrderCity} - ${directOrderAddress || 'حسب التنسيق'}
@@ -237,7 +237,11 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
     setCart((prev) => prev.filter((item) => item.product.id !== productId));
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const cartTotal = cart.reduce(
+    (sum, item) =>
+      sum + Number(item.product.selling_price || 0) * item.quantity,
+    0
+  );
   const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   // Filtered Products
@@ -435,7 +439,7 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
               <div className="mt-8 pt-6 border-t border-stone-200/60 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-stone-500">السعر الفردي:</span>
-                  <span className="text-base font-extrabold text-stone-950">{directOrderProduct.price} ₪</span>
+                  <span className="text-base font-extrabold text-stone-950">{directOrderProduct.selling_price} ₪</span>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -462,7 +466,7 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
                 <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between">
                   <span className="font-black text-emerald-900 text-xs">المجموع المطلوب للدفع عند الاستلام:</span>
                   <span className="text-xl font-black text-emerald-700">
-                    {directOrderProduct.price * directOrderQuantity} ₪
+                    {directOrderProduct.selling_price * directOrderQuantity} ₪
                   </span>
                 </div>
               </div>
@@ -1016,9 +1020,9 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
 
                 <div className="pt-4 border-t border-stone-100 flex items-center justify-between">
                   <div>
-                    <span className="text-lg font-extrabold text-emerald-700">{p.price} ₪</span>
-                    {p.oldPrice && (
-                      <span className="text-xs text-stone-400 line-through mr-2">{p.oldPrice} ₪</span>
+                    <span className="text-lg font-extrabold text-emerald-700">{p.selling_price} ₪</span>
+                    {p.old_price && (
+                      <span className="text-xs text-stone-400 line-through mr-2">{p.old_price} ₪</span>
                     )}
                   </div>
                   {/* Action Button: Adapts directly to storeMode */}
@@ -1138,7 +1142,7 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
                         <div className="flex-1 min-w-0">
                           <h4 className="font-bold text-xs text-stone-900 truncate">{p.name}</h4>
                           <div className="text-emerald-700 font-extrabold text-xs mt-0.5">
-                            {p.price} ₪
+                            {p.selling_price} ₪
                           </div>
                           {p.stock > 0 ? (
                             <button
@@ -1211,7 +1215,7 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-xs text-stone-900 truncate">{item.product.name}</h4>
                       <div className="text-emerald-700 font-extrabold text-xs mt-0.5">
-                        {item.product.price} ₪
+                        {item.product.selling_price} ₪
                       </div>
                       <div className="flex items-center gap-2 mt-2">
                         <button

@@ -18,7 +18,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ order, order
   };
 
   const formattedDate = order.order_date || new Date(order.created_at).toLocaleDateString('ar-SA');
-  const storeName = storeSettings.store_name || 'متجر النخبة';
+  const storeName = storeSettings.store_name || 'ElegancesPlace';
   const logoInitial = storeName.trim().charAt(0) || 'ن';
 
   return (
@@ -151,7 +151,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ order, order
               <ShieldCheck className="w-8 h-8 text-emerald-600 shrink-0" />
               <div>
                 <p className="font-bold text-emerald-950">فاتورة إلكترونية موثقة</p>
-                <p className="text-emerald-700 mt-0.5">صادرة عن متجر النخبة ومزامنة سحابياً مع سجلات الطلبات المحفوطة.</p>
+                <p className="text-emerald-700 mt-0.5">صادرة عن ElegancesPlace ومزامنة سحابياً مع سجلات الطلبات المحفوطة.</p>
               </div>
             </div>
 
@@ -179,7 +179,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ order, order
 
           {/* Footer Seal */}
           <div className="border-t border-stone-200 pt-6 text-center text-xs text-stone-500 space-y-1">
-            <p className="font-medium">شكراً لتسوقك معنا في متجر النخبة!</p>
+            <p className="font-medium">شكراً لتسوقك معنا في ElegancesPlace!</p>
             <p className="text-[11px] text-stone-400">لأي استفسارات بخصوص هذه الفاتورة أو شروط الإرجاع والاستبدال، يسعدنا تواصلكم معنا عبر الدعم الفني.</p>
           </div>
         </div>

@@ -179,7 +179,7 @@ export const Phase1SetupView: React.FC = () => {
                     </div>
 
                     <div className="text-xs text-stone-500 mt-1 break-all">
-                      {config.webhookUrl}
+                      {config.apiUrl}
                     </div>
                   </div>
 

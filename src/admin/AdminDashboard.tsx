@@ -486,7 +486,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
 
   // Google Sheets input states
   const [inputSheetId, setInputSheetId] = useState(config.sheetId);
-  const [inputWebhook, setInputWebhook] = useState(config.webhookUrl);
+  const [inputWebhook, setInputWebhook] = useState(config.apiUrl);
   const [inputFolderId, setInputFolderId] = useState(config.folderId);
   const [inputCategoriesFolderId, setInputCategoriesFolderId] = useState(config.categoriesFolderId || config.folderId);
 
@@ -1605,7 +1605,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                       onClick={() => {
                         updateConfig({ 
                           sheetId: inputSheetId, 
-                          webhookUrl: inputWebhook, 
+                          apiUrl: inputWebhook, 
                           folderId: inputFolderId.trim(), 
                           categoriesFolderId: inputCategoriesFolderId.trim() 
                         });

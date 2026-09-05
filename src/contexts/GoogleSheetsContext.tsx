@@ -19,7 +19,7 @@ import {
 
 export interface GoogleSheetsConfig {
   sheetId: string;
-  webhookUrl: string;
+  apiUrl: string;
   folderId: string;
   categoriesFolderId: string;
   autoSync: boolean;
@@ -232,7 +232,7 @@ const DEFAULT_CONFIG: GoogleSheetsConfig = {
   sheetId:
     "1MtmMwC9bBrEgX-y2wqltuvwmIsPIt0vUdi0L03JesRU",
 
-  webhookUrl:
+  apiUrl:
     "https://script.google.com/macros/s/AKfycbw2bDPslbyuoZ-bhC2pIgLPJZglO2mum2IkSWl1hqYiwjwPCkvDeY4qUqLKpjX_tXqtEQ/exec",
 
   folderId:
@@ -1482,7 +1482,7 @@ export const GoogleSheetsProvider:
           }
 
           if (
-            !config.webhookUrl
+            !config.apiUrl
           ) {
             const message =
               "رابط Google Apps Script غير موجود.";
@@ -1552,7 +1552,7 @@ export const GoogleSheetsProvider:
 
             const response =
               await fetch(
-                config.webhookUrl,
+                config.apiUrl,
                 {
                   method:
                     "POST",
@@ -1650,7 +1650,7 @@ export const GoogleSheetsProvider:
         },
         [
           buildV3TablesPayload,
-          config.webhookUrl,
+          config.apiUrl,
           markSyncSuccess,
           parseApiResponse,
           saveSnapshot,
@@ -1689,7 +1689,7 @@ export const GoogleSheetsProvider:
           }
 
           if (
-            !config.webhookUrl
+            !config.apiUrl
           ) {
             setSyncError(
               "رابط Google Apps Script غير موجود."
@@ -1761,7 +1761,7 @@ export const GoogleSheetsProvider:
                     changed.length >
                     0
                   ) {
-                    tables[
+                    tables.tables![
                       tableName
                     ] =
                       cleanArrayForStorage(
@@ -1995,7 +1995,7 @@ export const GoogleSheetsProvider:
                     changed.length >
                     0
                   ) {
-                    tables[
+                    tables.tables![
                       tableName
                     ] =
                       cleanArrayForStorage(
@@ -2056,12 +2056,12 @@ export const GoogleSheetsProvider:
                   total +
                   (
                     Array.isArray(
-                      tables[
+                      tables.tables?.[
                         tableName as V3TableName
                       ]
                     )
                       ? (
-                          tables[
+                          tables.tables![
                             tableName as V3TableName
                           ] as unknown[]
                         ).length
@@ -2086,7 +2086,7 @@ export const GoogleSheetsProvider:
 
             const response =
               await fetch(
-                config.webhookUrl,
+                config.apiUrl,
                 {
                   method:
                     "POST",
@@ -2199,7 +2199,7 @@ export const GoogleSheetsProvider:
         },
         [
           calculateChangedRecords,
-          config.webhookUrl,
+          config.apiUrl,
           markSyncSuccess,
           mergeSnapshotRecords,
           parseApiResponse,
@@ -2221,7 +2221,7 @@ export const GoogleSheetsProvider:
         > => {
           try {
             if (
-              !config.webhookUrl
+              !config.apiUrl
             ) {
               return {
                 success:
@@ -2259,7 +2259,7 @@ export const GoogleSheetsProvider:
 
             const response =
               await fetch(
-                config.webhookUrl,
+                config.apiUrl,
                 {
                   method:
                     "POST",
@@ -2330,7 +2330,7 @@ export const GoogleSheetsProvider:
           }
         },
         [
-          config.webhookUrl,
+          config.apiUrl,
           parseApiResponse,
         ]
       );
@@ -2352,7 +2352,7 @@ export const GoogleSheetsProvider:
         > => {
           try {
             if (
-              !config.webhookUrl
+              !config.apiUrl
             ) {
               return {
                 success:
@@ -2433,7 +2433,7 @@ export const GoogleSheetsProvider:
 
             const response =
               await fetch(
-                config.webhookUrl,
+                config.apiUrl,
                 {
                   method:
                     "POST",
@@ -2564,7 +2564,7 @@ export const GoogleSheetsProvider:
           }
         },
         [
-          config.webhookUrl,
+          config.apiUrl,
           parseApiResponse,
         ]
       );
@@ -2584,7 +2584,7 @@ export const GoogleSheetsProvider:
         ): Promise<UploadMediaResult> => {
           try {
             if (
-              !config.webhookUrl
+              !config.apiUrl
             ) {
               return {
                 success:
@@ -2694,7 +2694,7 @@ export const GoogleSheetsProvider:
 
             const response =
               await fetch(
-                config.webhookUrl,
+                config.apiUrl,
                 {
                   method:
                     "POST",
@@ -2832,7 +2832,7 @@ export const GoogleSheetsProvider:
           }
         },
         [
-          config.webhookUrl,
+          config.apiUrl,
           parseApiResponse,
         ]
       );
@@ -2873,7 +2873,7 @@ export const GoogleSheetsProvider:
             }
 
             if (
-              !config.webhookUrl
+              !config.apiUrl
             ) {
               return {
                 ...emptyResult,
@@ -2885,7 +2885,7 @@ export const GoogleSheetsProvider:
 
             const response =
               await fetch(
-                config.webhookUrl,
+                config.apiUrl,
                 {
                   method:
                     "POST",
@@ -3083,7 +3083,7 @@ export const GoogleSheetsProvider:
           }
         },
         [
-          config.webhookUrl,
+          config.apiUrl,
           parseApiResponse,
         ]
       );
@@ -3228,7 +3228,7 @@ export const GoogleSheetsProvider:
             }
 
             if (
-              !config.webhookUrl
+              !config.apiUrl
             ) {
               setSyncError(
                 "رابط Google Apps Script غير موجود."
@@ -3290,7 +3290,7 @@ export const GoogleSheetsProvider:
             );
 
             const url =
-              `${config.webhookUrl}?${params.toString()}`;
+              `${config.apiUrl}?${params.toString()}`;
 
             console.log(
               "Google Sheets V3: Pull selected tables:",
@@ -3364,7 +3364,7 @@ export const GoogleSheetsProvider:
         },
         [
           applyPulledTables,
-          config.webhookUrl,
+          config.apiUrl,
           markSyncSuccess,
           parseApiResponse,
         ]
@@ -3389,7 +3389,7 @@ export const GoogleSheetsProvider:
             }
 
             if (
-              !config.webhookUrl
+              !config.apiUrl
             ) {
               setSyncError(
                 "رابط Google Apps Script غير موجود."
@@ -3407,7 +3407,7 @@ export const GoogleSheetsProvider:
             );
 
             const url =
-              `${config.webhookUrl}?action=get_all_tables`;
+              `${config.apiUrl}?action=get_all_tables`;
 
             const response =
               await fetch(
@@ -3476,7 +3476,7 @@ export const GoogleSheetsProvider:
         },
         [
           applyPulledTables,
-          config.webhookUrl,
+          config.apiUrl,
           markSyncSuccess,
           parseApiResponse,
         ]

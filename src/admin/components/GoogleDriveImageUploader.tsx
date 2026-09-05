@@ -131,7 +131,7 @@ export const GoogleDriveImageUploader: React.FC<
     useState(false);
 
   const [modalWebhookInput, setModalWebhookInput] =
-    useState(config.webhookUrl || '');
+    useState(config.apiUrl || '');
 
   const [modalFolderInput, setModalFolderInput] =
     useState(config.folderId || '');
@@ -163,9 +163,9 @@ export const GoogleDriveImageUploader: React.FC<
      ========================================================== */
 
   const isWebhookConfigured = Boolean(
-    config.webhookUrl &&
-      config.webhookUrl.startsWith('https://') &&
-      !config.webhookUrl.includes('AKfycb...')
+    config.apiUrl &&
+      config.apiUrl.startsWith('https://') &&
+      !config.apiUrl.includes('AKfycb...')
   );
 
   /* ==========================================================
@@ -1001,7 +1001,7 @@ export const GoogleDriveImageUploader: React.FC<
 
   const handleSaveModalSettings =
     () => {
-      const webhookUrl =
+      const apiUrl =
         modalWebhookInput.trim();
 
       const folderId =
@@ -1011,7 +1011,7 @@ export const GoogleDriveImageUploader: React.FC<
         (previous) => ({
           ...previous,
 
-          webhookUrl,
+          apiUrl,
 
           folderId,
         })

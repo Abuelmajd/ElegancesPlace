@@ -24,6 +24,7 @@ import { useProducts } from './ProductContext';
 import { useGoogleSheets } from './GoogleSheetsContext';
 import { useAuth } from './AuthContext';
 import { useNotifications } from './NotificationContext';
+import { useInventory } from './InventoryContext';
 
 export interface OrderContextType {
   orders: Order[];
@@ -438,10 +439,11 @@ const INITIAL_AUDIT_LOGS: AuditLog[] = [
 ];
 
 export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { products, updateProductStock } = useProducts();
+  const { products } = useProducts();
   const { syncNow } = useGoogleSheets();
   const { currentUser } = useAuth();
   const { notifyNewOrder, notifyOrderStatusChange } = useNotifications();
+  const { getProductStock, adjustStock, setStockDirectly } = useInventory();
 
   const [orders, setOrders] = useState<Order[]>(() => {
     const cached = localStorage.getItem('elites_orders');
@@ -608,9 +610,32 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     
     // Check stock first
     for (const item of itemsInput) {
-      const prod = products.find(p => p.id === item.product_id || p.product_id === item.product_id);
+      const prod = products.find(
+        p => p.id === item.product_id || p.product_id === item.product_id
+      );
+
       if (!prod) {
-        return { success: false, error: 'PRODUCT_NOT_FOUND', message: `المنتج (${item.product_id}) غير متوفر في المتجر.` };
+        return {
+          success: false,
+          error: 'PRODUCT_NOT_FOUND',
+          message: `المنتج (${item.product_id}) غير متوفر في المتجر.`
+        };
+      }
+
+      const fulfillmentMethod = prod.fulfillment_method || 'OWN_STOCK';
+
+      if (fulfillmentMethod === 'OWN_STOCK') {
+        const availableStock = getProductStock(
+          prod.product_id || prod.id
+        );
+
+        if (availableStock < item.quantity) {
+          return {
+            success: false,
+            error: 'INSUFFICIENT_STOCK',
+            message: `المخزون غير كافٍ للمنتج "${prod.name}". المتاح: ${availableStock}، المطلوب: ${item.quantity}.`
+          };
+        }
       }
     }
 
@@ -624,7 +649,6 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     let subtotal = 0;
     const items: OrderItem[] = [];
     const fulfillments: SupplierFulfillment[] = [];
-    const movements: InventoryMovement[] = [];
     let isDropshipping = false;
 
     for (const item of itemsInput) {
@@ -685,23 +709,15 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       items.push(orderItem);
 
       if (fMethod === 'OWN_STOCK') {
+        const productId = prod.product_id || prod.id;
 
-        const movement: InventoryMovement = {
-          movement_id: 'mov_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-          product_id: prod.product_id || prod.id,
-          order_id: orderId,
-          quantity: item.quantity,
-          before_quantity: currentStock,
-          after_quantity: newStock,
-          movement_type: 'SALE',
-          user_id: currentUser?.user_id || 'system',
-          date: dateStr,
-          time: timeStr,
-          timestamp: `${dateStr} ${timeStr}`,
-          created_at: new Date().toISOString(),
-          notes: `خصم بيع مخزون محلي للطلب ${orderNum}`
-        };
-        movements.push(movement);
+        adjustStock(
+          productId,
+          -item.quantity,
+          'SALE',
+          orderId,
+          `خصم بيع مخزون للطلب ${orderNum}`
+        );
       } else {
         isDropshipping = true;
         const fulfillment: SupplierFulfillment = {
@@ -822,9 +838,6 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (fulfillments.length > 0) {
       setSupplierFulfillments(prev => [...fulfillments, ...prev]);
     }
-    if (movements.length > 0) {
-      setInventoryMovements(prev => [...movements, ...prev]);
-    }
     setTimelineEvents(prev => [tEvent, ...prev]);
 
     addAuditLog({
@@ -845,7 +858,17 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 400);
 
     return { success: true, order: newOrder, message: `تم إنشاء الطلب بنجاح برقم (${newOrder.order_number})!` };
-  }, [products, orders, customers, currentUser, updateProductStock, addAuditLog, notifyNewOrder, syncNow]);
+  }, [
+    products,
+    orders,
+    customers,
+    currentUser,
+    getProductStock,
+    adjustStock,
+    addAuditLog,
+    notifyNewOrder,
+    syncNow
+  ]);
 
   const updateOrderStatus = useCallback(async (orderId: string, newStatus: OrderStatus, notes = '') => {
     const order = orders.find(o => o.order_id === orderId);
@@ -1137,7 +1160,19 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setInventoryMovements(prev => [newMovement, ...prev]);
 
     if (movement.after_quantity !== undefined) {
-      updateProductStock(movement.product_id, movement.after_quantity);
+      const currentStock = getProductStock(movement.product_id);
+      const difference =
+        movement.after_quantity - currentStock;
+
+      if (difference !== 0) {
+        adjustStock(
+          movement.product_id,
+          difference,
+          movement.movement_type,
+          movement.order_id,
+          movement.notes || movement.reason
+        );
+      }
     }
 
     addAuditLog({
@@ -1148,7 +1183,11 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
 
     return true;
-  }, [updateProductStock, addAuditLog]);
+  }, [
+    getProductStock,
+    adjustStock,
+    addAuditLog
+  ]);
 
   const syncOrdersWithSheets = useCallback(async () => {
     await syncNow();
@@ -1201,7 +1240,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const testProd = products.find(p => p.id === 'p2') || products[0];
     const initialStock = 10;
-    updateProductStock(testProd.id, initialStock);
+    setStockDirectly(testProd.id, initialStock);
 
     log.push(`✅ تم ضبط مخزون المنتج "${testProd.name}" إلى ${initialStock} قطع.`);
 
@@ -1232,7 +1271,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     log.push('✅ تم تسجيل الأحداث في Order Timeline وسجل التدقيق Audit Log.');
 
     return { success: true, log, orderId: order.order_id };
-  }, [products, updateProductStock, createOrder]);
+  }, [products, setStockDirectly, createOrder]);
 
   const getOrderById = useCallback((orderId: string) => orders.find(o => o.order_id === orderId), [orders]);
   const getOrderItems = useCallback((orderId: string) => orderItems.filter(item => item.order_id === orderId), [orderItems]);

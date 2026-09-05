@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProductProvider } from './contexts/ProductContext';
 import { GoogleSheetsProvider } from './contexts/GoogleSheetsContext';
+import { InventoryProvider } from './contexts/InventoryContext';
 import { OrderProvider } from './contexts/OrderContext';
 import { AccountingProvider } from './contexts/AccountingContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -71,21 +72,23 @@ export default function App() {
       <NotificationProvider>
         <GoogleSheetsProvider>
           <ProductProvider>
-            <OrderProvider>
-              <AccountingProvider>
-                <WishlistProvider>
-                  <ReviewProvider>
-                    <ReturnProvider>
-                      <StoreProvider>
-                        <CategoryProvider>
-                          <MainApp />
-                        </CategoryProvider>
-                      </StoreProvider>
-                    </ReturnProvider>
-                  </ReviewProvider>
-                </WishlistProvider>
-              </AccountingProvider>
-            </OrderProvider>
+            <InventoryProvider>
+              <OrderProvider>
+                <AccountingProvider>
+                  <WishlistProvider>
+                    <ReviewProvider>
+                      <ReturnProvider>
+                        <StoreProvider>
+                          <CategoryProvider>
+                            <MainApp />
+                          </CategoryProvider>
+                        </StoreProvider>
+                      </ReturnProvider>
+                    </ReviewProvider>
+                  </WishlistProvider>
+                </AccountingProvider>
+              </OrderProvider>
+            </InventoryProvider>
           </ProductProvider>
         </GoogleSheetsProvider>
       </NotificationProvider>

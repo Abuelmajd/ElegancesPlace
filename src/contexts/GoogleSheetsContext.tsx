@@ -142,6 +142,10 @@ interface GoogleSheetsContextType {
 
   syncError: string | null;
 
+  getCachedTable: (
+    tableName: V3TableName
+  ) => unknown[];
+
   /*
    * Full Sync
    *
@@ -738,6 +742,16 @@ export const GoogleSheetsProvider:
           return [];
         },
         []
+      );
+
+    const getCachedTable =
+      useCallback(
+        (
+          tableName: V3TableName
+        ): unknown[] => {
+          return readTable(tableName);
+        },
+        [readTable]
       );
 
     /* ========================================================
@@ -3661,6 +3675,8 @@ export const GoogleSheetsProvider:
       lastSync,
 
       syncError,
+
+      getCachedTable,
 
       /*
        * Full Sync

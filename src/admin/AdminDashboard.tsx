@@ -1897,7 +1897,9 @@ function syncTable(ss, sheetName, data) {
               onUpdateProducts={(updatedProducts) => {
                 const updates = updatedProducts.map(p => ({
                   id: p.id,
-                  product: { price: Number(p.selling_price) }
+                  product: {
+                  selling_price: Number(p.selling_price)
+                }
                 }));
                 updateProducts(updates);
                 setSuccessMsg('تم تحديث أسعار المنتجات المحددة بنجاح!');

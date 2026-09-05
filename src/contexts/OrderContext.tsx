@@ -612,16 +612,6 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!prod) {
         return { success: false, error: 'PRODUCT_NOT_FOUND', message: `المنتج (${item.product_id}) غير متوفر في المتجر.` };
       }
-      if ((prod.fulfillment_method || 'OWN_STOCK') === 'OWN_STOCK') {
-        const availableStock = prod.stock !== undefined ? Number(prod.stock) : 0;
-        if (availableStock < item.quantity) {
-          return {
-            success: false,
-            error: 'INSUFFICIENT_STOCK',
-            message: `INSUFFICIENT STOCK: الكمية المتوفرة في المخزون للمنتج "${prod.name}" هي (${availableStock}) فقط، بينما المطلوب (${item.quantity}). لا يمكن إتمام الطلب.`
-          };
-        }
-      }
     }
 
     const d = new Date();
@@ -640,8 +630,10 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     for (const item of itemsInput) {
       const prod = products.find(p => p.id === item.product_id || p.product_id === item.product_id)!;
       const fMethod = prod.fulfillment_method || 'OWN_STOCK';
-      const sPrice = Number(prod.price) || 0;
-      const cPrice = prod.costPrice !== undefined ? Number(prod.costPrice) : Math.round(sPrice * 0.7);
+      const sPrice = Number(prod.selling_price) || 0;
+      const cPrice = prod.cost_price !== undefined
+      ? Number(prod.cost_price)
+      : Math.round(sPrice * 0.7);
       const discount = item.discount || 0;
       const itemSubtotal = (sPrice * item.quantity) - discount;
       const profit = itemSubtotal - (cPrice * item.quantity);
@@ -693,9 +685,6 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       items.push(orderItem);
 
       if (fMethod === 'OWN_STOCK') {
-        const currentStock = Number(prod.stock) || 0;
-        const newStock = Math.max(0, currentStock - item.quantity);
-        updateProductStock(prod.id, newStock);
 
         const movement: InventoryMovement = {
           movement_id: 'mov_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),

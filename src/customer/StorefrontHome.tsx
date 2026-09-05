@@ -429,7 +429,7 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
 
                 <div className="space-y-2">
                   <span className="inline-block text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200/60">
-                    {directOrderProduct.category}
+                    {directOrderProduct.category_id}
                   </span>
                   <h4 className="font-black text-stone-900 text-lg leading-tight">{directOrderProduct.name}</h4>
                   <p className="text-xs text-stone-500 leading-relaxed">{directOrderProduct.description}</p>
@@ -1007,14 +1007,14 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
 
               <div className="p-5 flex-1 flex flex-col justify-between">
                 <div>
-                  <span className="text-xs text-stone-500 font-medium">{p.category}</span>
+                  <span className="text-xs text-stone-500 font-medium">{p.category_id}</span>
                   <h3 className="font-bold text-stone-900 text-base mt-1 mb-2 line-clamp-1">{p.name}</h3>
                   <div className="flex items-center gap-1 text-amber-500 text-xs mb-3">
                     <Star className="w-3.5 h-3.5 fill-current" />
                     <span className="font-bold text-stone-700">{p.rating}</span>
                     <span className="text-stone-400 text-[11px] mr-2">
-                      (المتبقي: {p.stock} قطعة)
-                    </span>
+  {p.fulfillment_method === "OWN_STOCK" ? "متوفر" : "متاح للطلب"}
+</span>
                   </div>
                 </div>
 
@@ -1144,7 +1144,7 @@ export const StorefrontHome: React.FC<StorefrontHomeProps> = ({ onOpenAuthModal,
                           <div className="text-emerald-700 font-extrabold text-xs mt-0.5">
                             {p.selling_price} ₪
                           </div>
-                          {p.stock > 0 ? (
+                          {p.fulfillment_method === "OWN_STOCK" || p.fulfillment_method === "SUPPLIER_DROPSHIPPING" ? (
                             <button
                               onClick={() => {
                                 addToCart(p);
